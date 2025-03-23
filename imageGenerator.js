@@ -338,8 +338,8 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Set up error handling
         img.onerror = function() {
-            console.error('Failed to load image');
-            imagePreview.innerHTML = '<div class="error-message" style="padding: 20px; background-color: rgba(255,0,0,0.1); color: #d32f2f; border-radius: 8px; text-align: center;"><i class="fas fa-exclamation-triangle" style="margin-right: 8px;"></i>Failed to load image. Please try again.</div>';
+            console.error('Failed to load image: ', imageData ? (typeof imageData === 'string' ? imageData.substring(0, 30) + '...' : 'binary data') : 'no data');
+            imagePreview.innerHTML = '<div class="error-message" style="padding: 20px; background-color: rgba(255,0,0,0.1); color: #d32f2f; border-radius: 8px; text-align: center;"><i class="fas fa-exclamation-triangle" style="margin-right: 8px;"></i>Failed to load image. Please try again or check console for details.</div>';
         };
         
         // Set up success handling
@@ -394,6 +394,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     typeof imageData === 'string' ? 
                     (imageData.startsWith('data:') ? 'data:URL' : imageData.substring(0, 30) + '...') : 
                     'unknown format');
+        
+        // Verify we have valid image data before setting src
+        if (!imageData) {
+            imagePreview.innerHTML = '<div class="error-message" style="padding: 20px; background-color: rgba(255,0,0,0.1); color: #d32f2f; border-radius: 8px; text-align: center;"><i class="fas fa-exclamation-triangle" style="margin-right: 8px;"></i>No image data received. Please try again.</div>';
+            return;
+        }
         
         // Set the image source (after setting up handlers)
         img.src = imageData;
@@ -585,11 +591,20 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Function to save generated image to localStorage for use in merchandise
     function saveGeneratedImageForMerch(imageUrl, entityName = '') {
+        // Validate the image URL first
+        if (!imageUrl) {
+            console.error('Attempted to save an empty or undefined image URL');
+            return;
+        }
+        
+        // Make sure the URL is a string
+        const urlToSave = String(imageUrl);
+        
         // Get existing saved images or create a new array
         let savedImages = JSON.parse(localStorage.getItem('generatedImages')) || [];
         
-        // Check if this image is already saved
-        const isDuplicate = savedImages.some(image => image.url === imageUrl);
+        // Check if this image is already saved (prevent duplicates)
+        const isDuplicate = savedImages.some(image => image.url === urlToSave);
         
         if (!isDuplicate) {
             // If entityName wasn't provided, try to get it from the DOM
@@ -600,20 +615,47 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
             
-            // Add the new image URL with the entity name
-            savedImages.push({
-                url: imageUrl,
-                date: new Date().toISOString(),
-                name: entityName || ''
-            });
-            
-            // Only keep the last 20 images to prevent localStorage from getting too large
-            if (savedImages.length > 20) {
-                savedImages = savedImages.slice(savedImages.length - 20);
+            try {
+                // Add the new image URL with the entity name
+                savedImages.push({
+                    url: urlToSave,
+                    date: new Date().toISOString(),
+                    name: entityName || ''
+                });
+                
+                // Only keep the last 20 images to prevent localStorage from getting too large
+                if (savedImages.length > 20) {
+                    savedImages = savedImages.slice(savedImages.length - 20);
+                }
+                
+                // Save back to localStorage
+                localStorage.setItem('generatedImages', JSON.stringify(savedImages));
+                console.log('Image saved successfully to localStorage for merch');
+            } catch (error) {
+                console.error('Error saving image to localStorage:', error);
+                
+                // If storage is full, try to free up space by removing older images
+                if (error.name === 'QuotaExceededError' || error.toString().includes('storage')) {
+                    try {
+                        // Keep only the 5 most recent images
+                        savedImages = savedImages.slice(-5);
+                        localStorage.setItem('generatedImages', JSON.stringify(savedImages));
+                        
+                        // Try to add the new image again
+                        savedImages.push({
+                            url: urlToSave,
+                            date: new Date().toISOString(),
+                            name: entityName || ''
+                        });
+                        localStorage.setItem('generatedImages', JSON.stringify(savedImages));
+                        console.log('Storage recovered and image saved after cleanup');
+                    } catch (innerError) {
+                        console.error('Failed to save image even after cleanup:', innerError);
+                    }
+                }
             }
-            
-            // Save back to localStorage
-            localStorage.setItem('generatedImages', JSON.stringify(savedImages));
+        } else {
+            console.log('Image already exists in localStorage, skipping save');
         }
     }
 }); 

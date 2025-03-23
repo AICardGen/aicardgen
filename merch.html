@@ -708,18 +708,45 @@
         }
         
         .position-controls {
-            display: flex;
-            flex-direction: row;
-            align-items: center;
-            justify-content: center;
-            gap: 0.5rem;
-            margin-top: 0.5rem;
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 0.8rem;
+            margin-top: 1rem;
+            justify-items: center;
+            width: 100%;
+            max-width: 250px;
+            margin-left: auto;
+            margin-right: auto;
         }
         
         .control-row {
-            display: flex;
-            flex-direction: column;
-            gap: 0.3rem;
+            display: contents;
+        }
+        
+        /* Set specific grid positions for each control */
+        #moveUp {
+            grid-column: 2;
+            grid-row: 1;
+        }
+        
+        #moveLeft {
+            grid-column: 1;
+            grid-row: 2;
+        }
+        
+        #resetPosition {
+            grid-column: 2;
+            grid-row: 2;
+        }
+        
+        #moveRight {
+            grid-column: 3;
+            grid-row: 2;
+        }
+        
+        #moveDown {
+            grid-column: 2;
+            grid-row: 3;
         }
         
         .position-btn {
@@ -855,12 +882,14 @@
             }
             
             .tshirt-preview-container {
-                min-height: 550px;
+                min-height: auto;
+                display: flex;
+                flex-direction: column;
             }
             
             .shirt-display-container {
-                height: 300px;
-                padding: 1rem;
+                height: 380px;
+                padding: 1.5rem;
             }
             
             .tshirt-preview {
@@ -872,7 +901,56 @@
             }
             
             .design-controls-container {
-                padding: 0.75rem 1rem;
+                padding: 1.25rem;
+                height: auto;
+                background-color: #2d2040;
+                margin-top: auto;
+                border-radius: 0;
+            }
+            
+            .design-controls-title {
+                font-size: 1.1rem;
+                margin-bottom: 0.8rem;
+                color: #fff;
+                text-align: center;
+                padding-bottom: 0.5rem;
+                border-color: rgba(255, 255, 255, 0.2);
+            }
+            
+            .slider-controls {
+                margin-bottom: 1.5rem;
+            }
+            
+            .slider-group {
+                margin-bottom: 1.25rem;
+            }
+            
+            .slider-group label {
+                color: #fff;
+                min-width: 80px;
+                font-size: 1rem;
+            }
+            
+            .slider-group span {
+                color: #fff;
+                min-width: 50px;
+                font-size: 1rem;
+            }
+            
+            .custom-slider {
+                height: 10px;
+                border-radius: 5px;
+                background-color: rgba(255, 255, 255, 0.2);
+            }
+            
+            .custom-slider::-webkit-slider-thumb {
+                width: 22px;
+                height: 22px;
+            }
+            
+            .custom-slider::-moz-range-thumb {
+                width: 22px;
+                height: 22px;
             }
             
             .preview-btn {
@@ -882,21 +960,29 @@
             }
             
             .position-controls {
+                display: grid;
+                grid-template-columns: 1fr 1fr 1fr;
+                gap: 0.8rem;
+                margin-top: 1rem;
+                justify-items: center;
+                width: 100%;
+                max-width: 250px;
+                margin-left: auto;
+                margin-right: auto;
+            }
+            
+            #moveUp, #moveDown, #moveLeft, #moveRight, #resetPosition {
+                width: 54px;
+                height: 54px;
+                font-size: 1.25rem;
+                border-radius: 10px;
+                background-color: rgba(255, 255, 255, 0.15);
+                color: #fff;
+                border: 1px solid rgba(255, 255, 255, 0.3);
                 display: flex;
-                flex-direction: row;
                 align-items: center;
                 justify-content: center;
-                gap: 0.5rem;
-                margin-top: 0.5rem;
-            }
-            
-            .control-row {
-                flex-direction: column;
-            }
-            
-            .position-btn, .reset-position-btn {
-                width: 44px;
-                height: 44px;
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
             }
             
             .tshirt-options {
@@ -937,12 +1023,14 @@
                 padding: 0.5rem;
             }
             
-            .slider-controls {
-                width: 100%;
+            /* Fix button hover styles */
+            #moveUp:hover, #moveDown:hover, #moveLeft:hover, #moveRight:hover, #resetPosition:hover {
+                background-color: var(--primary-light);
+                transform: translateY(-2px);
             }
             
-            .control-row {
-                flex-direction: column;
+            #moveUp:active, #moveDown:active, #moveLeft:active, #moveRight:active, #resetPosition:active {
+                transform: translateY(0);
             }
         }
         
@@ -1242,6 +1330,95 @@
             margin-right: 8px;
             color: var(--success);
         }
+        
+        .fade-in {
+            animation: fadeIn 0.5s ease-in-out;
+        }
+        
+        /* Generated image placeholders */
+        #uploadedImagePreview:empty::before,
+        .generated-image-container:empty::before {
+            content: 'Please generate or select an image first';
+            display: block;
+            padding: 40px 20px;
+            color: var(--text-light);
+            font-style: italic;
+            text-align: center;
+            background-color: var(--secondary);
+            border-radius: 8px;
+        }
+        
+        #generatedImagesSelect option[value=""] {
+            font-style: italic;
+            color: var(--text-light);
+        }
+        
+        /* Add a helpful note below image selector */
+        .image-select-note {
+            font-size: 0.85rem;
+            color: var(--text-light);
+            margin-top: 0.5rem;
+            font-style: italic;
+        }
+        
+        /* Fix for image loading issues */
+        img[src=""],
+        img:not([src]) {
+            display: none;
+        }
+        
+        /* Loader for images */
+        .image-loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+            background-color: var(--secondary);
+            border-radius: 8px;
+        }
+        
+        @keyframes rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        
+        .spinner {
+            width: 30px;
+            height: 30px;
+            border: 3px solid var(--border);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: rotate 1s linear infinite;
+        }
+        
+        /* Cart icon animations */
+        .cart-icon.pulse-animation, 
+        .view-cart-btn.pulse-animation {
+            animation: cartPulse 1.5s ease-in-out;
+        }
+        
+        @keyframes cartPulse {
+            0% {
+                transform: scale(1);
+                box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+            }
+            25% {
+                transform: scale(1.1);
+                box-shadow: 0 6px 15px rgba(0, 0, 0, 0.25);
+            }
+            50% {
+                transform: scale(1);
+                box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+            }
+            75% {
+                transform: scale(1.05);
+                box-shadow: 0 5px 12px rgba(0, 0, 0, 0.22);
+            }
+            100% {
+                transform: scale(1);
+                box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+            }
+        }
     </style>
 </head>
 <body>
@@ -1391,6 +1568,7 @@
                         <select id="generatedImagesSelect" class="option-select">
                             <option value="">Select a generated image</option>
                         </select>
+                        <p class="image-select-note">If no images appear, you need to generate images first from the main page. <a href="index.html" style="color: var(--primary);">Go back to generate images</a></p>
                     </div>
                     
                     <div class="divider"></div>

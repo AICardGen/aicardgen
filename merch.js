@@ -194,6 +194,23 @@ function addCustomToCart(style, size, color, imageUrl, price, designPosition) {
         return false;
     }
     
+    // Check if an identical item already exists in the cart
+    const isDuplicate = cart.some(item => 
+        item.style === style && 
+        item.size === size && 
+        item.color === color && 
+        item.imageUrl === imageUrl &&
+        Math.abs(item.designPosition.x - designPosition.x) < 5 &&
+        Math.abs(item.designPosition.y - designPosition.y) < 5 &&
+        Math.abs(item.designPosition.scale - designPosition.scale) < 5 &&
+        Math.abs(item.designPosition.rotation - designPosition.rotation) < 5
+    );
+    
+    if (isDuplicate) {
+        showToast('This item is already in your cart!');
+        return false;
+    }
+    
     // Log design position
     console.log('Design position:', designPosition);
     
@@ -503,6 +520,16 @@ function setupAddToCartButton() {
             setTimeout(() => {
                 this.innerHTML = originalButtonText;
                 this.disabled = false;
+                
+                // If successful, show a feedback toast if not already shown by addCustomToCart
+                if (success) {
+                    // Focus the cart icon or button to draw attention to it
+                    const cartIcon = document.querySelector('.cart-icon') || document.getElementById('viewCartBtn');
+                    if (cartIcon) {
+                        cartIcon.classList.add('pulse-animation');
+                        setTimeout(() => cartIcon.classList.remove('pulse-animation'), 2000);
+                    }
+                }
             }, success ? 2000 : 500);
             
         } catch (error) {
@@ -1284,31 +1311,8 @@ function initCustomTshirt() {
     }
     
     // Add custom T-shirt to cart
-    addCustomToCartBtn.addEventListener('click', function() {
-        const style = tshirtStyleSelect.value;
-        const size = tshirtSizeSelect.value;
-        const color = tshirtColorSelect.value;
-        
-        // Make sure an image is uploaded
-        if (tshirtPreview.src.includes('Upload+Your+Image')) {
-            alert('Please upload an image or select one from your generated images!');
-            return;
-        }
-        
-        // Calculate price based on style
-        let price = 29.99;
-        if (style === 'longsleeve') {
-            price += 5;
-        } else if (style === 'croptop') {
-            price += 2;
-        }
-        
-        // Add to cart directly
-        addCustomToCart(style, size, color, tshirtPreview.src, price, designPosition);
-        
-        // Show success message
-        showToast(`Added ${style} t-shirt to cart!`);
-    });
+    // NOTE: Click handler for the Add to Cart button is now set up in the setupAddToCartButton function
+    // to prevent duplicate event handlers and multiple cart additions.
     
     // Set the initial design position
     applyDesignPosition();
@@ -1606,6 +1610,9 @@ function loadGeneratedImages() {
                 generatedImagesSelect.add(option, 1);
                 generatedImagesSelect.value = option.value;
                 
+                // Save this image to localStorage so it's available next time
+                saveGeneratedImageForMerch(decodeURIComponent(imageParam), 'Current Image');
+                
                 // Trigger the change event to update the preview
                 const event = new Event('change');
                 generatedImagesSelect.dispatchEvent(event);
@@ -1629,9 +1636,18 @@ function loadGeneratedImages() {
             generatedImagesSelect.add(option, 1);
             generatedImagesSelect.value = option.value;
             
+            // Save this image to localStorage so it's available next time
+            saveGeneratedImageForMerch(decodeURIComponent(imageParam), 'Current Image');
+            
             // Trigger the change event to update the preview
             const event = new Event('change');
             generatedImagesSelect.dispatchEvent(event);
+        } else {
+            // If no images found and no URL parameter, add a sample option
+            const sampleOption = document.createElement('option');
+            sampleOption.value = '';
+            sampleOption.textContent = 'Generate an image first or upload an image';
+            generatedImagesSelect.appendChild(sampleOption);
         }
     }
 }
