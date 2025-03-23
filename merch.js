@@ -1,6 +1,55 @@
 // Merchandise System for Fantasy Prompt Generator
 // Handles T-shirt customization, shopping cart, and checkout
 
+// Configuration for email and payment services
+const config = {
+    emailjs: {
+        serviceId: 'service_fcsd7gr', // EmailJS service ID
+        customerTemplateId: 'template_pchevsq', // Original template ID
+        newTemplateId: 'template_pchevsq', // Replace this with your new template ID after creating it in EmailJS
+        businessTemplateId: 'template_pchevsq'  // Using the same template for business notifications
+    },
+    businessEmail: 'aicardgen_business@outlook.com',
+    testEmail: 'aicardgen_business@outlook.com'
+};
+
+// Loading overlay functions
+function showLoadingOverlay(message = 'Processing...') {
+    // Remove existing overlay if present
+    hideLoadingOverlay();
+    
+    // Create overlay element
+    const overlay = document.createElement('div');
+    overlay.id = 'loadingOverlay';
+    overlay.className = 'loading-overlay';
+    overlay.innerHTML = `
+        <div class="loading-spinner"></div>
+        <p>${message}</p>
+    `;
+    
+    // Add to the active modal or body if no modal is open
+    const activeModal = document.querySelector('.cart-modal[style*="display: flex"]');
+    if (activeModal) {
+        const modalContent = activeModal.querySelector('.cart-content');
+        if (modalContent) {
+            modalContent.style.position = 'relative';
+            modalContent.appendChild(overlay);
+        } else {
+            document.body.appendChild(overlay);
+        }
+    } else {
+        document.body.appendChild(overlay);
+    }
+}
+
+function hideLoadingOverlay() {
+    // Remove any existing overlay
+    const existingOverlay = document.getElementById('loadingOverlay');
+    if (existingOverlay && existingOverlay.parentNode) {
+        existingOverlay.parentNode.removeChild(existingOverlay);
+    }
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     // Theme toggle functionality
     const themeToggle = document.getElementById('themeToggle');
@@ -87,14 +136,14 @@ function initCart() {
         }
     });
     
-    // Handle checkout button
-    document.getElementById('checkoutBtn').addEventListener('click', function() {
+    // Handle send invoice button
+    document.getElementById('sendInvoiceBtn').addEventListener('click', function() {
         if (cart.length === 0) {
             alert('Your cart is empty!');
             return;
         }
         
-        proceedToCheckout();
+        sendInvoiceWithoutPayment();
     });
     
     // Initialize PayPal button in cart if PayPal is available
@@ -109,13 +158,19 @@ function initializePayPalButton() {
     // Clear any existing buttons
     paypalButtonContainer.innerHTML = '';
     
-    // Add a nice container for PayPal button
+    // Check if cart is empty
+    if (cart.length === 0) {
+        paypalButtonContainer.style.display = 'none';
+        return;
+    } else {
+        paypalButtonContainer.style.display = 'block';
+    }
+    
+    // Show loading state
     paypalButtonContainer.innerHTML = `
-        <div class="paypal-button-wrapper">
-            <div id="paypal-button-container"></div>
-            <div class="payment-security-badge">
-                <i class="fas fa-shield-alt"></i> Secure payment via PayPal
-            </div>
+        <div class="paypal-loading">
+            <div class="loading-spinner"></div>
+            <span>Loading PayPal...</span>
         </div>
     `;
     
@@ -124,133 +179,267 @@ function initializePayPalButton() {
         const styleEl = document.createElement('style');
         styleEl.id = 'paypal-button-styles';
         styleEl.textContent = `
-            .paypal-button-wrapper {
-                margin-top: 1rem;
-                padding: 0.75rem;
-                background-color: #f5f7fa;
-                border-radius: 8px;
-                border: 1px solid #e0e6ed;
-            }
-            
-            .payment-security-badge {
+            .paypal-loading {
                 display: flex;
+                flex-direction: column;
                 align-items: center;
                 justify-content: center;
-                margin-top: 0.75rem;
-                font-size: 0.85rem;
-                color: var(--text-light);
+                padding: 1.5rem;
+                background-color: #f8f9fa;
+                border-radius: 8px;
+                text-align: center;
+                margin-bottom: 1rem;
             }
-            
-            .payment-security-badge i {
-                margin-right: 6px;
-                color: #0070ba;
+            .loading-spinner {
+                border: 3px solid #f3f3f3;
+                border-top: 3px solid #0070ba;
+                border-radius: 50%;
+                width: 24px;
+                height: 24px;
+                animation: spin 1s linear infinite;
+                margin-bottom: 0.5rem;
+            }
+            @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
             }
         `;
         document.head.appendChild(styleEl);
     }
     
-    // Wait for PayPal script to be ready
-    if (!window.paypal) {
-        console.log('PayPal script not loaded, waiting for it to load...');
-        setTimeout(initializePayPalButton, 500);
-        return;
-    }
+    // Set timeout for error handling
+    const paypalLoadTimeout = setTimeout(() => {
+        console.warn('PayPal loading timed out after 10 seconds');
+        paypalButtonContainer.innerHTML = `
+            <div class="paypal-error">
+                <i class="fas fa-exclamation-triangle"></i>
+                <p>PayPal is taking too long to load</p>
+                <button class="btn btn-primary retry-btn" onclick="initializePayPalButton()">
+                    <i class="fas fa-redo"></i> Try Again
+                </button>
+            </div>
+        `;
+    }, 10000);
+    
+    // Load PayPal script and render button
+    loadPayPalScript()
+        .then(() => {
+            clearTimeout(paypalLoadTimeout);
+            if (window.paypal && window.paypal.Buttons) {
+                console.log('PayPal SDK loaded successfully, rendering buttons');
+                renderPayPalButton();
+            } else {
+                console.error('PayPal SDK did not load properly');
+                throw new Error('PayPal SDK did not initialize correctly');
+            }
+        })
+        .catch(error => {
+            clearTimeout(paypalLoadTimeout);
+            console.error('Failed to load PayPal:', error);
+            paypalButtonContainer.innerHTML = `
+                <div class="paypal-error">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <p>Could not load PayPal checkout</p>
+                    <div class="error-details">${error.message}</div>
+                    <button class="btn btn-primary retry-btn" onclick="initializePayPalButton()">
+                        <i class="fas fa-redo"></i> Try Again
+                    </button>
+                    <button class="btn btn-success" onclick="showManualCheckout()">
+                        <i class="fas fa-envelope"></i> Contact Us to Order
+                    </button>
+                </div>
+            `;
+        });
+}
+
+// Function to render the PayPal button
+function renderPayPalButton() {
+    const paypalButtonContainer = document.getElementById('paypalButtonContainer');
+    if (!paypalButtonContainer) return;
     
     // Calculate total
     const total = cart.reduce((sum, item) => sum + parseFloat(item.price), 0);
     
-    // Render the PayPal button
-    window.paypal.Buttons({
-        style: {
-            layout: 'horizontal',
-            color: 'blue',
-            shape: 'rect',
-            label: 'paypal'
-        },
+    // Clear previous PayPal button to avoid duplicates
+    paypalButtonContainer.innerHTML = '';
+    
+    try {
+        console.log('Rendering PayPal button with total: $' + total.toFixed(2));
         
-        createOrder: function(data, actions) {
-            // Create the order with current cart items
-            return actions.order.create({
-                purchase_units: [{
-                    amount: {
-                        value: total.toFixed(2)
-                    },
-                    description: 'Custom T-shirt from Fantasy Prompt Generator',
-                    payee: {
-                        email_address: 'unkownrb@hotmail.com'
-                    },
-                    items: cart.map(item => ({
-                        name: `Custom ${formatStyle(item.style)} T-shirt`,
-                        unit_amount: {
-                            value: parseFloat(item.price).toFixed(2),
-                            currency_code: 'USD'
-                        },
-                        quantity: 1,
-                        description: `Size: ${item.size}, Color: ${item.color}`
-                    }))
-                }]
-            });
-        },
+        // Check if PayPal SDK is loaded
+        if (!window.paypal || !window.paypal.Buttons) {
+            console.error('PayPal SDK not available when trying to render button');
+            paypalButtonContainer.innerHTML = `
+                <div class="paypal-error">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <p>PayPal is not available</p>
+                    <button class="btn btn-primary retry-btn" onclick="initializePayPalButton()">
+                        <i class="fas fa-redo"></i> Try Again
+                    </button>
+                </div>
+            `;
+            return;
+        }
         
-        onApprove: function(data, actions) {
-            // Show loading state
-            const paypalBtn = document.getElementById('paypal-button-container');
-            if (paypalBtn) {
-                paypalBtn.innerHTML = `
-                    <div style="display: flex; align-items: center; justify-content: center; padding: 1rem;">
-                        <div class="loading-spinner" style="width: 24px; height: 24px; margin-right: 10px;"></div>
-                        <span>Processing payment...</span>
-                    </div>
-                `;
-            }
+        // Check if cart is empty or total is invalid
+        if (cart.length === 0 || total <= 0) {
+            paypalButtonContainer.innerHTML = `
+                <div style="padding: 1rem; text-align: center; color: #757575; background-color: #f5f5f5; border-radius: 8px;">
+                    <i class="fas fa-info-circle" style="margin-right: 8px;"></i>
+                    Add items to your cart to enable checkout
+                </div>
+            `;
+            return;
+        }
+        
+        // Create PayPal button
+        window.paypal.Buttons({
+            style: {
+                layout: 'vertical',
+                color: 'gold',
+                shape: 'rect',
+                label: 'paypal'
+            },
             
-            // Capture the funds
-            return actions.order.capture().then(function(details) {
-                console.log('PayPal transaction completed', details);
+            // Create order
+            createOrder: function(data, actions) {
+                showLoadingOverlay('Creating PayPal order...');
                 
-                // Create order object for email
-                const order = {
-                    id: data.orderID,
-                    date: new Date().toISOString(),
-                    customer: {
-                        name: details.payer.name.given_name + ' ' + details.payer.name.surname,
-                        email: details.payer.email_address,
-                        address: details.payer.address ? details.payer.address.address_line_1 : 'Address not provided'
+                // Create order items array for PayPal
+                const items = cart.map(item => ({
+                    name: `Custom ${formatStyle(item.style)} T-shirt - ${item.color}, Size: ${item.size}`,
+                    unit_amount: {
+                        currency_code: 'USD',
+                        value: parseFloat(item.price).toFixed(2)
                     },
-                    items: cart,
-                    total: total,
-                    paymentMethod: 'PayPal'
-                };
+                    quantity: '1'
+                }));
                 
-                // Send order details to email
-                sendOrderToEmail(order).then(() => {
-                    // Hide cart modal
+                return actions.order.create({
+                    purchase_units: [{
+                        description: 'Custom T-shirt Order',
+                        amount: {
+                            currency_code: 'USD',
+                            value: total.toFixed(2),
+                            breakdown: {
+                                item_total: {
+                                    currency_code: 'USD',
+                                    value: total.toFixed(2)
+                                }
+                            }
+                        },
+                        items: items
+                    }]
+                }).then(function(orderId) {
+                    console.log('PayPal order created with ID:', orderId);
+                    hideLoadingOverlay();
+                    return orderId;
+                }).catch(function(error) {
+                    console.error('Error creating PayPal order:', error);
+                    hideLoadingOverlay();
+                    showToast('Error creating PayPal order. Please try again.', 'error');
+                    throw error;
+                });
+            },
+            
+            // Handle approve
+            onApprove: function(data, actions) {
+                showLoadingOverlay('Processing payment...');
+                
+                return actions.order.capture().then(function(orderData) {
+                    console.log('PayPal payment completed:', orderData);
+                    
+                    // Close cart modal
                     document.getElementById('cartModal').style.display = 'none';
                     
-                    // Show success message and reset cart
-                    showOrderSuccessMessage('PayPal');
+                    // Create order data
+                    const orderDetails = {
+                        paypal: {
+                            orderId: data.orderID,
+                            payerId: orderData.payer.payer_id,
+                            status: orderData.status,
+                            details: orderData
+                        },
+                        items: cart,
+                        total: total,
+                        date: new Date().toISOString(),
+                        customerEmail: orderData.payer.email_address,
+                        customerName: `${orderData.payer.name.given_name} ${orderData.payer.name.surname}`
+                    };
                     
-                    // Clear the cart
+                    // Save order to localStorage for reference
+                    const orders = JSON.parse(localStorage.getItem('tshirtOrders') || '[]');
+                    orders.push(orderDetails);
+                    localStorage.setItem('tshirtOrders', JSON.stringify(orders));
+                    
+                    // Send order confirmation email
+                    sendOrderToEmail(orderDetails);
+                    
+                    // Clear cart after successful payment
                     cart = [];
                     saveCart();
                     updateCartBadge();
+                    
+                    // Show success message
+                    hideLoadingOverlay();
+                    showOrderSuccessMessage('PayPal');
+                }).catch(function(error) {
+                    console.error('PayPal capture error:', error);
+                    hideLoadingOverlay();
+                    showToast('Payment processing failed. Please try again.', 'error');
                 });
-            });
-        },
-        
-        onError: function(err) {
-            console.error('PayPal error:', err);
-            const paypalBtn = document.getElementById('paypal-button-container');
-            if (paypalBtn) {
-                paypalBtn.innerHTML = `
-                    <div style="color: #d32f2f; padding: 1rem; text-align: center; background-color: rgba(211, 47, 47, 0.1); border-radius: 6px;">
-                        <i class="fas fa-exclamation-triangle" style="margin-right: 8px;"></i>
-                        PayPal error. Please try again or use another payment method.
+            },
+            
+            onError: function(err) {
+                console.error('PayPal error:', err);
+                hideLoadingOverlay();
+                showToast('Payment processing failed. Please try again or use a different payment method.', 'error');
+                
+                paypalButtonContainer.innerHTML = `
+                    <div class="paypal-error">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <p>PayPal payment failed</p>
+                        <button class="btn btn-primary retry-btn" onclick="initializePayPalButton()">
+                            <i class="fas fa-redo"></i> Try Again
+                        </button>
                     </div>
                 `;
+            },
+            
+            onCancel: function() {
+                showToast('Payment cancelled. Your cart items are still saved.', 'info');
             }
-        }
-    }).render('#paypal-button-container');
+        }).render('#paypalButtonContainer')
+        .catch(error => {
+            console.error('Error rendering PayPal button:', error);
+            paypalButtonContainer.innerHTML = `
+                <div class="paypal-error">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <p>Could not initialize PayPal checkout</p>
+                    <button class="btn btn-primary retry-btn" onclick="initializePayPalButton()">
+                        <i class="fas fa-redo"></i> Try Again
+                    </button>
+                    <button class="btn btn-success" onclick="showManualCheckout()">
+                        <i class="fas fa-envelope"></i> Contact Us to Order
+                    </button>
+                </div>
+            `;
+        });
+    } catch (error) {
+        console.error('Error initializing PayPal:', error);
+        paypalButtonContainer.innerHTML = `
+            <div class="paypal-error">
+                <i class="fas fa-exclamation-triangle"></i>
+                <p>Error loading PayPal</p>
+                <button class="btn btn-primary retry-btn" onclick="initializePayPalButton()">
+                    <i class="fas fa-redo"></i> Try Again
+                </button>
+                <button class="btn btn-success" onclick="showManualCheckout()">
+                    <i class="fas fa-envelope"></i> Contact Us to Order
+                </button>
+            </div>
+        `;
+    }
 }
 
 // Add custom t-shirt to cart
@@ -683,170 +872,292 @@ function setupAddToCartButton() {
     });
 }
 
-// Show a satisfying animation when item is added to cart
+// Show an animation when an item is added to cart
 function showAddToCartAnimation(imageUrl) {
-    try {
-        // Create the animation element
-        const animContainer = document.createElement('div');
-        animContainer.style.position = 'fixed';
-        animContainer.style.zIndex = '10000';
-        animContainer.style.pointerEvents = 'none';
-        
-        // Create the flying image
-        const img = document.createElement('img');
-        img.src = imageUrl || './assets/default-tshirt.png'; // Fallback image if none provided
-        img.style.width = '150px';
-        img.style.height = '150px';
-        img.style.objectFit = 'contain';
-        img.style.position = 'absolute';
-        img.style.borderRadius = '10px';
-        img.style.boxShadow = '0 5px 15px rgba(0,0,0,0.3)';
-        img.style.transition = 'all 0.8s cubic-bezier(0.18, 0.89, 0.32, 1.28)';
-        
-        // Handle image loading errors
-        img.onerror = function() {
-            // If image fails to load, use a colored box instead
-            img.style.background = 'linear-gradient(135deg, #4a2c82, #753bbd)';
-            img.style.display = 'flex';
-            img.style.alignItems = 'center';
-            img.style.justifyContent = 'center';
-            img.src = ''; // Clear the src to stop loading attempts
-            img.alt = 'T-shirt added to cart';
-        };
-        
-        // Add the image to the container
-        animContainer.appendChild(img);
-        document.body.appendChild(animContainer);
-        
-        // Get positions for animation
-        const startButton = document.getElementById('addCustomToCart');
-        const endCart = document.querySelector('.cart-icon') || document.getElementById('viewCartBtn') || document.getElementById('cartIcon');
-        
-        if (!startButton || !endCart) {
-            // Fallback if elements aren't found - still show animation from center of screen
-            const viewportWidth = Math.max(document.documentElement.clientWidth || 0, window.innerWidth || 0);
-            const viewportHeight = Math.max(document.documentElement.clientHeight || 0, window.innerHeight || 0);
-            
-            // Set start position at center of screen
-            img.style.top = `${viewportHeight/2 - 75}px`;
-            img.style.left = `${viewportWidth/2 - 75}px`;
-            img.style.transform = 'scale(1) rotate(0deg)';
-            img.style.opacity = '1';
-            
-            // Animate to top right corner
-            setTimeout(() => {
-                img.style.top = '20px';
-                img.style.right = '20px';
-                img.style.transform = 'scale(0.2) rotate(10deg)';
-                img.style.opacity = '0';
-                
-                // Clean up and show toast
-                setTimeout(() => {
-                    if (document.body.contains(animContainer)) {
-                        document.body.removeChild(animContainer);
-                    }
-                    showToast('Added custom T-shirt to cart!', 'success');
-                }, 800);
-            }, 100);
-            
-            return;
-        }
-        
-        // Get element positions
-        const startRect = startButton.getBoundingClientRect();
-        const endRect = endCart.getBoundingClientRect();
-        
-        // Set start position
-        img.style.top = `${startRect.top + startRect.height/2 - 75}px`;
-        img.style.left = `${startRect.left + startRect.width/2 - 75}px`;
-        img.style.transform = 'scale(1) rotate(0deg)';
-        img.style.opacity = '1';
-        
-        // Trigger animation after a small delay
-        setTimeout(() => {
-            // Set end position
-            img.style.top = `${endRect.top + endRect.height/2 - 20}px`;
-            img.style.left = `${endRect.left + endRect.width/2 - 20}px`;
-            img.style.transform = 'scale(0.2) rotate(10deg)';
-            img.style.opacity = '0';
-            
-            // Add a bounce effect to the cart
-            endCart.style.transition = 'transform 0.3s ease-in-out';
-            endCart.style.transform = 'scale(1.2)';
-            setTimeout(() => {
-                endCart.style.transform = 'scale(1)';
-            }, 300);
-            
-            // Update cart badge immediately to show instant feedback
-            updateCartBadge();
-            
-            // Show success message after animation completes
-            setTimeout(() => {
-                if (document.body.contains(animContainer)) {
-                    document.body.removeChild(animContainer);
-                }
-                showToast('Added custom T-shirt to cart!', 'success');
-            }, 800);
-        }, 100);
-    } catch (error) {
-        console.error('Error in cart animation:', error);
-        // Ensure we still show confirmation even if animation fails
-        showToast('Added custom T-shirt to cart!', 'success');
+    // Create a floating image that animates to the cart
+    const floatingImage = document.createElement('div');
+    floatingImage.className = 'floating-cart-image';
+    floatingImage.innerHTML = `<img src="${imageUrl}" alt="Added to cart">`;
+    document.body.appendChild(floatingImage);
+    
+    // Get positions for animation
+    const previewImage = document.querySelector('.tshirt-preview-container');
+    const cartIcon = document.querySelector('.cart-icon') || document.querySelector('.view-cart-btn');
+    
+    if (!previewImage || !cartIcon) {
+        floatingImage.remove();
+        return;
     }
+    
+    const previewRect = previewImage.getBoundingClientRect();
+    const cartRect = cartIcon.getBoundingClientRect();
+    
+    // Set starting position
+    floatingImage.style.top = `${previewRect.top + previewRect.height/2}px`;
+    floatingImage.style.left = `${previewRect.left + previewRect.width/2}px`;
+    
+    // Apply initial styles
+    floatingImage.style.opacity = '1';
+    floatingImage.style.transform = 'translate(-50%, -50%) scale(1)';
+    
+    // Create keyframes for the animation
+    const keyframes = [
+        { // Starting position
+            top: `${previewRect.top + previewRect.height/2}px`,
+            left: `${previewRect.left + previewRect.width/2}px`,
+            opacity: 1,
+            transform: 'translate(-50%, -50%) scale(1)',
+            offset: 0
+        },
+        { // Midpoint - go up slightly
+            top: `${previewRect.top + previewRect.height/2 - 50}px`,
+            left: `${previewRect.left + previewRect.width/2 + 50}px`,
+            opacity: 0.8,
+            transform: 'translate(-50%, -50%) scale(0.8)',
+            offset: 0.4
+        },
+        { // End position - at cart icon
+            top: `${cartRect.top + cartRect.height/2}px`,
+            left: `${cartRect.left + cartRect.width/2}px`,
+            opacity: 0,
+            transform: 'translate(-50%, -50%) scale(0.2)',
+            offset: 1
+        }
+    ];
+    
+    // Configure the animation
+    const options = {
+        duration: 800,
+        easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)'
+    };
+    
+    // Start the animation
+    floatingImage.animate(keyframes, options);
+    
+    // Add animation styles if not already present
+    if (!document.getElementById('cartAnimationStyles')) {
+        const styleEl = document.createElement('style');
+        styleEl.id = 'cartAnimationStyles';
+        styleEl.textContent = `
+            .floating-cart-image {
+                position: fixed;
+                z-index: 9999;
+                pointer-events: none;
+                width: 80px;
+                height: 80px;
+                border-radius: 8px;
+                overflow: hidden;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            }
+            
+            .floating-cart-image img {
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+            }
+            
+            /* Cart icon pulse animation */
+            @keyframes cartPulse {
+                0% { transform: scale(1); }
+                50% { transform: scale(1.15); }
+                100% { transform: scale(1); }
+            }
+            
+            .cart-pulse {
+                animation: cartPulse 0.5s ease-in-out;
+            }
+        `;
+        document.head.appendChild(styleEl);
+    }
+    
+    // Remove the element after animation completes
+    setTimeout(() => {
+        floatingImage.remove();
+        
+        // Add pulse animation to cart icon
+        cartIcon.classList.add('cart-pulse');
+        setTimeout(() => {
+            cartIcon.classList.remove('cart-pulse');
+        }, 500);
+    }, 800);
+    
+    // Show success toast
+    showToast('Item added to cart!', 'success');
 }
 
-// Show toast notification with enhanced styling
+// Show toast notification with improved styling and animations
 function showToast(message, type = 'info') {
-    // Remove any existing toast
-    const existingToast = document.querySelector('.toast-notification');
-    if (existingToast) {
-        document.body.removeChild(existingToast);
+    // Remove any existing toasts to prevent stacking
+    const existingToasts = document.querySelectorAll('.toast-notification');
+    existingToasts.forEach(toast => {
+        document.body.removeChild(toast);
+    });
+    
+    // Create the toast element
+    const toast = document.createElement('div');
+    toast.className = `toast-notification toast-${type}`;
+    
+    // Determine icon based on type
+    let icon;
+    switch (type) {
+        case 'success':
+            icon = '<i class="fas fa-check-circle"></i>';
+            break;
+        case 'error':
+            icon = '<i class="fas fa-exclamation-circle"></i>';
+            break;
+        case 'warning':
+            icon = '<i class="fas fa-exclamation-triangle"></i>';
+            break;
+        case 'info':
+        default:
+            icon = '<i class="fas fa-info-circle"></i>';
+            break;
     }
     
-    // Create and append new toast
-    const toast = document.createElement('div');
-    toast.className = 'toast-notification';
-    toast.style.position = 'fixed';
-    toast.style.bottom = '20px';
-    toast.style.left = '50%';
-    toast.style.transform = 'translateX(-50%) translateY(20px)';
-    toast.style.backgroundColor = type === 'success' ? 'var(--success)' : type === 'error' ? '#e53935' : 'var(--primary)';
-    toast.style.color = 'white';
-    toast.style.padding = '12px 24px';
-    toast.style.borderRadius = '8px';
-    toast.style.zIndex = '1100';
-    toast.style.boxShadow = '0 4px 15px rgba(0, 0, 0, 0.2)';
-    toast.style.fontWeight = '500';
-    toast.style.transition = 'all 0.3s ease-out';
-    toast.style.opacity = '0';
-    toast.style.maxWidth = '80%';
-    toast.style.textAlign = 'center';
+    // Set toast content with icon
+    toast.innerHTML = `
+        <div class="toast-icon">${icon}</div>
+        <div class="toast-message">${message}</div>
+        <button class="toast-close"><i class="fas fa-times"></i></button>
+    `;
     
-    // Add icon based on type
-    const icon = document.createElement('i');
-    icon.className = type === 'success' ? 'fas fa-check-circle' : 
-                    type === 'error' ? 'fas fa-exclamation-circle' : 
-                    'fas fa-info-circle';
-    icon.style.marginRight = '8px';
+    // Add toast styles if not already added
+    if (!document.getElementById('toastStyles')) {
+        const styleEl = document.createElement('style');
+        styleEl.id = 'toastStyles';
+        styleEl.textContent = `
+            .toast-notification {
+                position: fixed;
+                bottom: 20px;
+                right: 20px;
+                padding: 12px 16px;
+                background-color: white;
+                color: var(--text);
+                border-radius: 6px;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                min-width: 280px;
+                max-width: 400px;
+                z-index: 9999;
+                animation: slideInRight 0.3s, fadeIn 0.3s;
+                border-left: 4px solid var(--primary);
+                transform-origin: bottom right;
+            }
+            
+            @media (max-width: 576px) {
+                .toast-notification {
+                    min-width: calc(100% - 40px);
+                    bottom: 70px;
+                }
+            }
+            
+            .toast-icon {
+                margin-right: 12px;
+                font-size: 1.2rem;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            
+            .toast-message {
+                flex: 1;
+                font-weight: 500;
+            }
+            
+            .toast-close {
+                background: transparent;
+                border: none;
+                color: var(--text-light);
+                cursor: pointer;
+                padding: 4px;
+                margin-left: 8px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                border-radius: 50%;
+                font-size: 0.8rem;
+                transition: background-color 0.2s, color 0.2s;
+            }
+            
+            .toast-close:hover {
+                background-color: rgba(0, 0, 0, 0.05);
+                color: var(--text);
+            }
+            
+            @keyframes slideInRight {
+                from { transform: translateX(100%); }
+                to { transform: translateX(0); }
+            }
+            
+            @keyframes fadeIn {
+                from { opacity: 0; }
+                to { opacity: 1; }
+            }
+            
+            @keyframes fadeOut {
+                from { opacity: 1; }
+                to { opacity: 0; }
+            }
+            
+            /* Toast types */
+            .toast-success {
+                border-left-color: #28a745;
+            }
+            
+            .toast-success .toast-icon {
+                color: #28a745;
+            }
+            
+            .toast-error {
+                border-left-color: #dc3545;
+            }
+            
+            .toast-error .toast-icon {
+                color: #dc3545;
+            }
+            
+            .toast-warning {
+                border-left-color: #ffc107;
+            }
+            
+            .toast-warning .toast-icon {
+                color: #ffc107;
+            }
+            
+            .toast-info {
+                border-left-color: var(--primary);
+            }
+            
+            .toast-info .toast-icon {
+                color: var(--primary);
+            }
+        `;
+        document.head.appendChild(styleEl);
+    }
     
-    toast.appendChild(icon);
-    toast.appendChild(document.createTextNode(message));
-    
+    // Add to document
     document.body.appendChild(toast);
     
-    // Animate in
-    setTimeout(() => {
-        toast.style.opacity = '1';
-        toast.style.transform = 'translateX(-50%) translateY(0)';
-    }, 10);
+    // Add close button functionality
+    const closeBtn = toast.querySelector('.toast-close');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', () => {
+            toast.style.animation = 'fadeOut 0.3s forwards';
+            setTimeout(() => {
+                if (document.body.contains(toast)) {
+                    document.body.removeChild(toast);
+                }
+            }, 300);
+        });
+    }
     
-    // Remove toast after 3 seconds
+    // Auto remove after 3 seconds
     setTimeout(() => {
         if (document.body.contains(toast)) {
-            toast.style.opacity = '0';
-            toast.style.transform = 'translateX(-50%) translateY(20px)';
-            
-            // Remove from DOM after fade out
+            toast.style.animation = 'fadeOut 0.3s forwards';
             setTimeout(() => {
                 if (document.body.contains(toast)) {
                     document.body.removeChild(toast);
@@ -858,19 +1169,35 @@ function showToast(message, type = 'info') {
 
 // Remove item from cart
 function removeFromCart(cartItemId) {
-    // Find the item index in the cart
+    // Find the item in the cart
     const itemIndex = cart.findIndex(item => item.id === cartItemId);
     
     if (itemIndex !== -1) {
+        // Get the item to show in toast
+        const item = cart[itemIndex];
+        
         // Remove the item from the cart
         cart.splice(itemIndex, 1);
         
+        // Save the updated cart to localStorage
         saveCart();
+        
+        // Update cart badge
         updateCartBadge();
+        
+        // Re-render cart items
         renderCartItems();
         
         // Show confirmation message
         showToast('Item removed from cart!');
+        
+        // If cart is now empty and modal is open, update display
+        if (cart.length === 0) {
+            const cartModal = document.getElementById('cartModal');
+            if (cartModal && cartModal.style.display === 'flex') {
+                renderCartItems(); // This will show the empty cart message
+            }
+        }
     }
 }
 
@@ -881,17 +1208,20 @@ function saveCart() {
 
 // Update cart badge with current count
 function updateCartBadge() {
-    // Make sure cartBadge exists
-    if (!cartBadge) return;
-    
-    // Update both badges (header and floating)
-    cartBadge.textContent = cart.length;
-    cartBadge.style.display = cart.length > 0 ? 'flex' : 'none';
-    
-    // Update header cart badge
+    // Find both cart badges (floating and header)
+    const cartBadge = document.getElementById('cartBadge');
     const headerCartBadge = document.getElementById('headerCartBadge');
+    
+    if (cartBadge) {
+        // Update floating cart badge
+        cartBadge.textContent = cart.length;
+        cartBadge.style.display = cart.length > 0 ? 'flex' : 'none';
+    }
+    
     if (headerCartBadge) {
+        // Update header cart badge
         headerCartBadge.textContent = cart.length;
+        headerCartBadge.style.display = cart.length > 0 ? 'flex' : 'none';
     }
 }
 
@@ -899,19 +1229,60 @@ function updateCartBadge() {
 function renderCartItems() {
     const cartItemsElement = document.getElementById('cartItems');
     const cartTotalElement = document.getElementById('cartTotal');
+    const cartSubtotalElement = document.getElementById('cartSubtotal');
+    const checkoutBtn = document.getElementById('checkoutBtn');
+    const paypalButtonContainer = document.getElementById('paypalButtonContainer');
+    
+    if (!cartItemsElement || !cartTotalElement) return;
     
     if (cart.length === 0) {
         cartItemsElement.innerHTML = `
             <div class="empty-cart">
-                <i class="fas fa-shopping-cart"></i>
+                <i class="fas fa-shopping-bag"></i>
                 <p>Your cart is empty</p>
-                <button class="btn btn-secondary" onclick="document.getElementById('cartModal').style.display='none'">
+                <p class="empty-cart-subtext">Add some custom merchandise to get started!</p>
+                <button class="btn btn-primary" onclick="document.getElementById('cartModal').style.display='none'">
                     Continue Shopping
                 </button>
             </div>
         `;
         cartTotalElement.textContent = '$0.00';
+        if (cartSubtotalElement) cartSubtotalElement.textContent = '$0.00';
+        
+        // Disable checkout button if it exists
+        if (checkoutBtn) {
+            checkoutBtn.disabled = true;
+            checkoutBtn.classList.add('disabled');
+        }
+        
+        // Hide PayPal button container if empty cart
+        if (paypalButtonContainer) {
+            paypalButtonContainer.style.display = 'none';
+        }
+        
         return;
+    }
+    
+    // Enable checkout button if it exists
+    if (checkoutBtn) {
+        checkoutBtn.disabled = false;
+        checkoutBtn.classList.remove('disabled');
+    }
+    
+    // Show PayPal button container if cart has items
+    if (paypalButtonContainer) {
+        paypalButtonContainer.style.display = 'block';
+        
+        // Check if PayPal button needs to be initialized
+        // Only initialize if the container is empty or shows an error
+        const needsInitialization = 
+            paypalButtonContainer.children.length === 0 || 
+            paypalButtonContainer.innerHTML.includes('fa-exclamation-triangle') ||
+            !paypalButtonContainer.querySelector('.paypal-button');
+            
+        if (needsInitialization) {
+            initializePayPalButton();
+        }
     }
     
     let totalPrice = 0;
@@ -922,7 +1293,7 @@ function renderCartItems() {
         <div class="cart-items-header">
             <span class="item-count">${cart.length} item${cart.length > 1 ? 's' : ''} in your cart</span>
             <div class="cart-header-actions">
-                <button class="btn-link" onclick="cart = []; saveCart(); updateCartBadge(); renderCartItems();">
+                <button class="btn-link" onclick="clearCart()">
                     <i class="fas fa-trash-alt"></i> Clear all
                 </button>
             </div>
@@ -947,7 +1318,7 @@ function renderCartItems() {
             <div class="cart-item" data-id="${item.id}">
                 <div class="cart-item-image">
                     <img src="${item.previewImageUrl || item.imageUrl}" alt="${style} design" 
-                         style="width: 100%; height: 100%; object-fit: contain; border-radius: 6px;">
+                         loading="lazy" onerror="this.src='https://placehold.co/80?text=T-shirt';">
                 </div>
                 <div class="cart-item-details">
                     <div class="cart-item-title">Custom ${style} T-shirt</div>
@@ -968,15 +1339,15 @@ function renderCartItems() {
         `;
     });
     
-    // Add a style tag for cart item styling enhancements
+    // Add CSS for cart items header
     cartHtml = `
         <style>
             .cart-items-header {
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
-                padding-bottom: 15px;
-                margin-bottom: 15px;
+                margin-bottom: 1.25rem;
+                padding-bottom: 0.75rem;
                 border-bottom: 1px solid var(--border);
             }
             
@@ -990,187 +1361,77 @@ function renderCartItems() {
                 border: none;
                 color: var(--text-light);
                 cursor: pointer;
-                padding: 0;
+                padding: 0.4rem 0.8rem;
                 font-size: 0.9rem;
-                transition: color 0.2s;
+                transition: all 0.2s;
+                border-radius: 6px;
             }
             
             .btn-link:hover {
+                background-color: rgba(0,0,0,0.05);
                 color: #e53935;
             }
             
-            .cart-item {
-                display: flex;
-                margin-bottom: 1.2rem;
-                padding-bottom: 1.2rem;
-                border-bottom: 1px solid var(--border);
-                transition: all 0.3s ease;
-                position: relative;
-                overflow: hidden;
-            }
-            
-            .cart-item:hover {
-                background-color: rgba(0,0,0,0.02);
-            }
-            
-            .cart-item-image {
-                width: 90px;
-                height: 90px;
+            .paypal-error {
+                text-align: center;
+                padding: 1.25rem;
+                background-color: #fff8f8;
                 border-radius: 8px;
-                overflow: hidden;
-                background-color: var(--secondary);
-                margin-right: 1rem;
-                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                border: 1px solid rgba(229, 57, 53, 0.2);
+                margin-top: 1rem;
             }
             
-            .cart-item-title {
-                font-weight: 600;
-                font-size: 1.05rem;
-                margin-bottom: 0.5rem;
-                color: var(--text);
-            }
-            
-            .cart-item-variant {
-                font-size: 0.9rem;
-                margin-bottom: 0.5rem;
-                display: flex;
-                align-items: center;
-                flex-wrap: wrap;
-                gap: 5px;
-            }
-            
-            .variant-label {
-                color: var(--text-light);
-            }
-            
-            .variant-value {
-                font-weight: 500;
-                color: var(--text);
-            }
-            
-            .variant-separator {
-                color: var(--text-light);
-                margin: 0 2px;
-            }
-            
-            .cart-item-customization {
-                font-size: 0.85rem;
-                margin-bottom: 0.7rem;
-                background-color: var(--secondary);
-                padding: 0.3rem 0.7rem;
-                border-radius: 20px;
-                display: inline-flex;
-                align-items: center;
-                color: var(--primary);
-                font-weight: 500;
-            }
-            
-            .cart-item-price {
-                font-weight: 600;
-                color: var(--primary);
-                font-size: 1.1rem;
-                margin-top: 0.3rem;
-            }
-            
-            .cart-item-remove {
-                background: transparent;
-                border: none;
-                color: var(--text-light);
-                cursor: pointer;
-                font-size: 0.85rem;
-                margin-top: 0.5rem;
-                padding: 0.3rem 0;
-                display: flex;
-                align-items: center;
-                transition: color 0.2s;
-            }
-            
-            .cart-item-remove:hover {
+            .paypal-error i {
+                font-size: 1.5rem;
                 color: #e53935;
+                margin-bottom: 0.75rem;
             }
             
-            .cart-item-remove i {
-                margin-right: 0.4rem;
+            .paypal-error p {
+                margin-bottom: 1rem;
+                color: #555;
+                font-weight: 500;
             }
             
-            /* Animation for removing items */
-            .removing-item {
-                transform: translateX(100%);
-                opacity: 0;
+            .retry-btn {
+                margin-bottom: 0.5rem;
             }
         </style>
     ` + cartHtml;
     
-    // Add a cart summary with enhanced styling
-    cartHtml += `
-        <div class="cart-summary-details" style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border);">
-            <div class="summary-row">
-                <span>Subtotal:</span>
-                <span>$${totalPrice.toFixed(2)}</span>
-            </div>
-            <div class="summary-row">
-                <span>Shipping:</span>
-                <span>FREE</span>
-            </div>
-            <div class="summary-row total">
-                <span>Total:</span>
-                <span>$${totalPrice.toFixed(2)}</span>
-            </div>
-        </div>
-        
-        <style>
-            .cart-summary-details {
-                margin-bottom: 1rem;
-            }
-            
-            .summary-row {
-                display: flex;
-                justify-content: space-between;
-                margin-bottom: 0.7rem;
-                font-size: 0.95rem;
-            }
-            
-            .summary-row.total {
-                font-size: 1.2rem;
-                font-weight: 600;
-                color: var(--primary);
-                margin-top: 0.7rem;
-                padding-top: 0.7rem;
-                border-top: 1px dashed var(--border);
-            }
-        </style>
-    `;
-    
     cartItemsElement.innerHTML = cartHtml;
     cartTotalElement.textContent = `$${totalPrice.toFixed(2)}`;
-    
-    // Add hover animations
-    document.querySelectorAll('.cart-item').forEach(item => {
-        item.addEventListener('mouseenter', function() {
-            this.style.transform = 'translateY(-2px)';
-        });
-        
-        item.addEventListener('mouseleave', function() {
-            this.style.transform = 'translateY(0)';
-        });
-    });
+    if (cartSubtotalElement) cartSubtotalElement.textContent = `$${totalPrice.toFixed(2)}`;
 }
 
-// Remove item from cart with animation
+// Remove an item from cart with animation
 function removeFromCartWithAnimation(cartItemId) {
     // Find the cart item element
     const cartItemElement = document.querySelector(`.cart-item[data-id="${cartItemId}"]`);
     
     if (cartItemElement) {
-        // Add the animation class
+        // Add the removing class for animation
         cartItemElement.classList.add('removing-item');
         
-        // Wait for animation to complete before actually removing
+        // After animation completes, remove the item from the cart
         setTimeout(() => {
-            removeFromCart(cartItemId);
-        }, 300);
+            // Remove the item from the cart array
+            cart = cart.filter(item => item.id !== cartItemId);
+            
+            // Save updated cart to localStorage
+            saveCart();
+            
+            // Update cart badge
+            updateCartBadge();
+            
+            // Re-render cart items
+            renderCartItems();
+            
+            // Show toast notification
+            showToast('Item removed from cart', 'info');
+        }, 300); // Match this to your CSS transition time
     } else {
-        // Fallback if element not found
+        // If element not found, remove directly
         removeFromCart(cartItemId);
     }
 }
@@ -1998,64 +2259,7 @@ function proceedToCheckout() {
     document.body.appendChild(checkoutModal);
     
     // Initialize PayPal button
-    if (window.paypal) {
-        window.paypal.Buttons({
-            createOrder: function(data, actions) {
-                // Set up the transaction
-                return actions.order.create({
-                    purchase_units: [{
-                        amount: {
-                            value: total.toFixed(2)
-                        },
-                        description: 'Custom T-shirt from Fantasy Prompt Generator',
-                        payee: {
-                            email_address: 'unkownrb@hotmail.com'
-                        }
-                    }]
-                });
-            },
-            onApprove: function(data, actions) {
-                // Capture the funds from the transaction
-                return actions.order.capture().then(function(details) {
-                    console.log('Transaction completed by: ' + details.payer.name.given_name);
-                    
-                    // Create order object for email
-                    const order = {
-                        id: data.orderID,
-                        date: new Date().toISOString(),
-                        customer: {
-                            name: details.payer.name.given_name + ' ' + details.payer.name.surname,
-                            email: details.payer.email_address,
-                            address: details.payer.address ? details.payer.address.address_line_1 : 'Address not provided'
-                        },
-                        items: cart,
-                        total: total,
-                        paymentMethod: 'PayPal'
-                    };
-                    
-                    // Send order details to email
-                    sendOrderToEmail(order).then(() => {
-                        // Hide cart modal
-                        document.getElementById('cartModal').style.display = 'none';
-                        
-                        // Show success message and reset cart
-                        showOrderSuccessMessage('PayPal');
-                        
-                        // Clear the cart
-                        cart = [];
-                        saveCart();
-                        updateCartBadge();
-                    });
-                });
-            },
-            onError: function(err) {
-                console.error('PayPal error:', err);
-                alert('There was an error processing your PayPal payment. Please try again.');
-            }
-        }).render('#paypalCheckoutButton');
-    } else {
-        document.getElementById('paypalCheckoutButton').innerHTML = '<div class="error-message">PayPal SDK failed to load. Please try the credit card option instead.</div>';
-    }
+    initializePayPalButton();
     
     // Add tooltips
     const tooltips = checkoutModal.querySelectorAll('[title]');
@@ -2209,120 +2413,111 @@ function proceedToCheckout() {
 }
 
 // Send order to email 
-function sendOrderToEmail(order) {
-    console.log("Preparing to send order email:", order);
-    showLoadingOverlay("Sending order confirmation...");
-
-    // Create HTML for order items
-    let itemsHtml = `
-    <table border="0" cellpadding="0" cellspacing="0" width="100%" style="border-collapse: collapse; margin-top: 15px; margin-bottom: 15px;">
-        <thead>
-            <tr>
-                <th style="padding: 12px 8px; background-color: #f2f0f7; text-align: left; border-top: 1px solid #e0e0e0; border-bottom: 1px solid #e0e0e0;">Item</th>
-                <th style="padding: 12px 8px; background-color: #f2f0f7; text-align: left; border-top: 1px solid #e0e0e0; border-bottom: 1px solid #e0e0e0;">Details</th>
-                <th style="padding: 12px 8px; background-color: #f2f0f7; text-align: center; border-top: 1px solid #e0e0e0; border-bottom: 1px solid #e0e0e0;">Design</th>
-                <th style="padding: 12px 8px; background-color: #f2f0f7; text-align: center; border-top: 1px solid #e0e0e0; border-bottom: 1px solid #e0e0e0;">Mockup</th>
-            </tr>
-        </thead>
-        <tbody>`;
-
-    // Add each item to the table
-    order.items.forEach(item => {
-        // Format design position information for readability
-        const designPositionInfo = item.designPosition ? 
-            `<div style="margin-top: 8px;"><strong>Design Position:</strong></div>
-            <div>X: ${item.designPosition.x}, Y: ${item.designPosition.y}</div>
-            <div>Scale: ${item.designPosition.scale}%</div>
-            <div>Rotation: ${item.designPosition.rotation}°</div>` : '';
-
-        itemsHtml += `
-        <tr>
-            <td style="padding: 12px 8px; border-bottom: 1px solid #e0e0e0; vertical-align: top;">
-                <strong>Custom ${item.style} T-shirt</strong>
-            </td>
-            <td style="padding: 12px 8px; border-bottom: 1px solid #e0e0e0; vertical-align: top;">
-                <div><strong>Size:</strong> ${item.size}</div>
-                <div><strong>Color:</strong> ${item.color}</div>
-                <div><strong>Price:</strong> $${item.price.toFixed(2)}</div>
-                ${designPositionInfo}
-            </td>
-            <td style="padding: 12px 8px; border-bottom: 1px solid #e0e0e0; text-align: center; vertical-align: top;">
-                <img src="${item.imageUrl}" alt="Design" style="max-width: 150px; border: 1px solid #eee;">
-            </td>
-            <td style="padding: 12px 8px; border-bottom: 1px solid #e0e0e0; text-align: center; vertical-align: top;">
-                <img src="${item.previewImageUrl}" alt="Mockup" style="max-width: 150px; border: 1px solid #eee;">
-            </td>
-        </tr>`;
-    });
-
-    // Close the table
-    itemsHtml += `
-        </tbody>
-        <tfoot>
-            <tr>
-                <td colspan="4" style="padding: 12px 8px; font-style: italic; color: #777; font-size: 14px; text-align: center;">
-                    Note: T-shirt mockup is an approximation. Actual product may vary slightly.
-                </td>
-            </tr>
-        </tfoot>
-    </table>`;
-
-    // Prepare email parameters for customer
-    const customerParams = {
-        to_name: order.customer.name,
-        email: order.customer.email,
-        from_name: "AI Card Gen Merch Shop",
-        subject: "Your Order Confirmation - #" + order.id,
-        order_id: order.id,
-        order_date: order.date,
-        payment_method: order.paymentMethod,
-        order_total: order.total.toFixed(2),
-        customer_name: order.customer.name,
-        customer_email: order.customer.email,
-        customer_address: order.customer.address,
-        order_items: itemsHtml
-    };
-
-    // Prepare email parameters for the business
-    const businessParams = {
-        to_name: "Shop Owner",
-        email: config.businessEmail,
-        from_name: "AI Card Gen Shop System",
-        subject: "New Order Received - #" + order.id,
-        order_id: order.id,
-        order_date: order.date,
-        payment_method: order.paymentMethod,
-        order_total: order.total.toFixed(2),
-        customer_name: order.customer.name,
-        customer_email: order.customer.email,
-        customer_address: order.customer.address,
-        order_items: itemsHtml
-    };
-
-    console.log("Sending customer email with parameters:", customerParams);
-    console.log("Sending business email with parameters:", businessParams);
-
-    // Send emails and return a promise
-    return new Promise((resolve, reject) => {
-        // Send to customer
-        emailjs.send(config.emailjs.serviceId, config.emailjs.customerTemplateId, customerParams)
-            .then(function(response) {
-                console.log("Customer email sent successfully:", response);
-                
-                // Send to business
-                return emailjs.send(config.emailjs.serviceId, config.emailjs.businessTemplateId, businessParams);
-            })
-            .then(function(response) {
-                console.log("Business email sent successfully:", response);
-                hideLoadingOverlay();
-                resolve(true); // Resolve the promise when both emails are sent
-            })
-            .catch(function(error) {
-                console.error("Email sending failed:", error);
-                hideLoadingOverlay();
-                showToast("Failed to send order confirmation. Please contact support.", "error");
-                reject(error); // Reject the promise if there's an error
+function sendOrderToEmail(order, isManualRequest = false) {
+    return new Promise(async (resolve, reject) => {
+        try {
+            // Show loading overlay while sending email
+            showLoadingOverlay('Sending order confirmation...');
+            
+            // Log entire order object to debug
+            console.log("Complete order object:", JSON.stringify(order));
+            
+            // We'll work with the original items without converting to data URLs
+            const items = order.items || [];
+            console.log("Order items:", JSON.stringify(items));
+            
+            // Extract individual item details for the first item (most orders have one item)
+            const firstItem = items[0] || {};
+            console.log("First item details:", JSON.stringify(firstItem));
+            
+            // Format order date
+            const orderDate = new Date(order.date || order.orderDate || Date.now()).toLocaleString();
+            
+            // Generate an order number
+            const orderNumber = order.customer?.paypalOrderId || `ORD-${Date.now()}`;
+            
+            // Set email subject and notification type based on order type
+            const emailSubject = isManualRequest ? 'Your Order Request' : 'Your Order Confirmation';
+            const notificationType = isManualRequest ? 'Manual Payment Required' : 'Order Confirmation';
+            
+            // Create a plain text order summary for multiple items
+            const orderSummaryText = items.map((item, index) => 
+                `Item ${index + 1}:\nProduct: Custom ${formatStyle(item.style || item.name || '')} T-shirt\nSize: ${item.size || ''}\nColor: ${item.color || ''}\nPrice: $${parseFloat(item.price || 0).toFixed(2)}`
+            ).join('\n\n-----------------\n\n');
+            
+            // Ensure we have valid product details with explicit fallbacks
+            const productStyle = formatStyle(firstItem.style || firstItem.name || 'T-shirt');
+            const productSize = firstItem.size || 'Standard';
+            const productColor = firstItem.color || 'Black';
+            const productPrice = firstItem.price ? parseFloat(firstItem.price).toFixed(2) : '0.00';
+            
+            console.log("Formatted product details:", {
+                style: productStyle,
+                size: productSize,
+                color: productColor,
+                price: productPrice
             });
+            
+            // Format email parameters for the customer with individual variables
+            const emailParams = {
+                // Customer info
+                to_name: order.customer?.name || 'Customer',
+                to_email: order.customer?.email || '',
+                email: order.customer?.email || '', // For backward compatibility
+                customer_address: order.customer?.address || 'Not provided',
+                customer_email: order.customer?.email || '',
+                customer_name: order.customer?.name || 'Customer',
+                
+                // Order info
+                order_id: orderNumber,
+                order_date: orderDate,
+                payment_method: order.paymentMethod || 'PayPal',
+                order_total: parseFloat(order.total || 0).toFixed(2),
+                
+                // Product details (from first item)
+                product_style: productStyle,
+                product_size: productSize,
+                product_color: productColor,
+                product_price: productPrice,
+                
+                // Use original image URLs instead of data URLs
+                product_image: firstItem.imageUrl || 'https://via.placeholder.com/200x200?text=Design',
+                mockup_image: firstItem.previewImageUrl || 'https://via.placeholder.com/200x200?text=Mockup',
+                
+                // Email content
+                subject: emailSubject,
+                from_name: 'NextGenStudios',
+                notification_type: notificationType,
+                is_manual_request: isManualRequest ? "yes" : "no",
+                
+                // Order summary for multiple items
+                order_summary: orderSummaryText
+            };
+            
+            console.log('Sending order confirmation email with params:', JSON.stringify(emailParams));
+            
+            // Send the email using EmailJS with the correct template ID
+            emailjs.send(
+                config.emailjs.serviceId,
+                'template_pchevsq', // Use template ID directly
+                emailParams,
+                config.emailjs.userId
+            )
+            .then((response) => {
+                console.log('Email sent successfully:', response);
+                hideLoadingOverlay();
+                resolve(response);
+            })
+            .catch((error) => {
+                console.error('Failed to send email:', error);
+                hideLoadingOverlay();
+                reject(error);
+            });
+        } catch (error) {
+            console.error('Error in sendOrderToEmail:', error);
+            hideLoadingOverlay();
+            reject(error);
+        }
     });
 }
 
@@ -3257,118 +3452,786 @@ function createMockupCanvas(style, color) {
     }
 }
 
-// Add a function to test EmailJS at the end of the file
+// Function to test EmailJS at the end of the file
 function testEmailJSSetup() {
     // Show loading overlay
     showLoadingOverlay("Testing EmailJS setup...");
     
-    // Create a sample order items table
-    const itemsHtml = `
-    <table border="0" cellpadding="0" cellspacing="0" width="100%" style="border-collapse: collapse; margin-top: 15px; margin-bottom: 15px;">
-        <thead>
-            <tr>
-                <th style="padding: 12px 8px; background-color: #f2f0f7; text-align: left; border-top: 1px solid #e0e0e0; border-bottom: 1px solid #e0e0e0;">Item</th>
-                <th style="padding: 12px 8px; background-color: #f2f0f7; text-align: left; border-top: 1px solid #e0e0e0; border-bottom: 1px solid #e0e0e0;">Details</th>
-                <th style="padding: 12px 8px; background-color: #f2f0f7; text-align: center; border-top: 1px solid #e0e0e0; border-bottom: 1px solid #e0e0e0;">Design</th>
-                <th style="padding: 12px 8px; background-color: #f2f0f7; text-align: center; border-top: 1px solid #e0e0e0; border-bottom: 1px solid #e0e0e0;">Mockup</th>
-            </tr>
-        </thead>
-        <tbody>
-            <tr>
-                <td style="padding: 12px 8px; border-bottom: 1px solid #e0e0e0; vertical-align: top;">
-                    <strong>Custom T-shirt</strong>
-                </td>
-                <td style="padding: 12px 8px; border-bottom: 1px solid #e0e0e0; vertical-align: top;">
-                    <div><strong>Size:</strong> L</div>
-                    <div><strong>Color:</strong> Black</div>
-                    <div><strong>Price:</strong> $25.99</div>
-                    <div style="margin-top: 8px;"><strong>Design Position:</strong></div>
-                    <div>X: 250, Y: 300</div>
-                    <div>Scale: 85%</div>
-                    <div>Rotation: 0°</div>
-                </td>
-                <td style="padding: 12px 8px; border-bottom: 1px solid #e0e0e0; text-align: center; vertical-align: top;">
-                    <img src="https://via.placeholder.com/150" alt="Design" style="max-width: 150px; border: 1px solid #eee;">
-                </td>
-                <td style="padding: 12px 8px; border-bottom: 1px solid #e0e0e0; text-align: center; vertical-align: top;">
-                    <img src="https://via.placeholder.com/150" alt="Mockup" style="max-width: 150px; border: 1px solid #eee;">
-                </td>
-            </tr>
-        </tbody>
-        <tfoot>
-            <tr>
-                <td colspan="4" style="padding: 12px 8px; font-style: italic; color: #777; font-size: 14px; text-align: center;">
-                    Note: T-shirt mockup is an approximation. Actual product may vary slightly.
-                </td>
-            </tr>
-        </tfoot>
-    </table>`;
-
-    // Prepare email parameters
-    const testParams = {
-        to_name: "Shop Owner",
-        email: config.testEmail,
-        from_name: "AICard Customer",
-        subject: "Test Order Confirmation",
-        order_id: "TEST-123456",
-        order_date: new Date().toLocaleString(),
-        payment_method: "Test Payment",
-        order_total: "25.99",
-        customer_name: "John Doe",
-        customer_email: "test@example.com",
-        customer_address: "123 Test St, Test City, TC 12345",
-        order_items: itemsHtml
-    };
-
-    console.log("Testing EmailJS setup with parameters:", testParams);
-
-    // Send the test email using the business template
-    emailjs.send(config.emailjs.serviceId, config.emailjs.businessTemplateId, testParams)
-        .then(function(response) {
+    try {
+        console.log("Testing EmailJS configuration:", config.emailjs);
+        
+        // Check if EmailJS is properly initialized
+        if (!emailjs || !emailjs.send) {
+            showToast("EmailJS is not properly initialized.", "error");
             hideLoadingOverlay();
-            console.log("Email sent successfully:", response);
-            showToast("Email test successful! Check " + config.testEmail + " for the test email.", "success");
-        }, function(error) {
+            return;
+        }
+        
+        // Check public key
+        if (!emailjs._userID) {
+            showToast("EmailJS public key is not set.", "error");
             hideLoadingOverlay();
-            console.error("Email send failed:", error);
-            showToast("Email test failed. Check console for details.", "error");
-        });
+            return;
+        }
+        
+        // Check if we have the service ID and template ID
+        if (!config.emailjs.serviceId || !config.emailjs.customerTemplateId) {
+            showToast("EmailJS service ID or template ID is missing.", "error");
+            hideLoadingOverlay();
+            return;
+        }
+        
+        // Format test parameters
+        const testParams = {
+            to_name: 'Test User',
+            to_email: config.testEmail,
+            email: config.testEmail,
+            order_number: "TEST-123456",
+            order_date: new Date().toLocaleString(),
+            payment_method: "Test Payment",
+            order_total: "$123.45",
+            items_list: "<tr><td>Test Item</td><td>$123.45</td></tr>",
+            customer_email: "test@example.com",
+            customer_address: "123 Test St, Test City, TC 12345",
+            from_name: "NextGenStudios",
+            subject: "Test Order Confirmation",
+            notification_type: "Test Notification"
+        };
+        
+        console.log("Testing EmailJS setup with parameters:", testParams);
+        
+        // Send the test email using the business template
+        emailjs.send(config.emailjs.serviceId, config.emailjs.businessTemplateId, testParams)
+            .then(function(response) {
+                console.log("Email test successful:", response);
+                hideLoadingOverlay();
+                showToast("Email test successful! Check " + config.testEmail + " for the test email.", "success");
+            })
+            .catch(function(error) {
+                console.error("Email test failed:", error);
+                hideLoadingOverlay();
+                showToast("Email test failed. Check console for details.", "error");
+            });
+    } catch (e) {
+        console.error("Error during test:", e);
+        hideLoadingOverlay();
+        showToast("Email test failed: " + e.message, "error");
+    }
 }
 
 // Add a visible test button when not in production
-if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname === '') {
-    window.addEventListener('load', function() {
-        const testButton = document.createElement('button');
-        testButton.textContent = 'Test Email Template';
-        testButton.style.position = 'fixed';
-        testButton.style.bottom = '20px';
-        testButton.style.left = '20px';
-        testButton.style.zIndex = '9999';
-        testButton.style.padding = '12px 20px';
-        testButton.style.backgroundColor = '#4a2c82';
-        testButton.style.color = 'white';
-        testButton.style.border = 'none';
-        testButton.style.borderRadius = '5px';
-        testButton.style.cursor = 'pointer';
-        testButton.style.fontWeight = 'bold';
-        testButton.style.boxShadow = '0 4px 8px rgba(0,0,0,0.2)';
+if (location.hostname === 'localhost' || location.hostname === '127.0.0.1' || location.hostname.includes('preview')) {
+    const testButton = document.createElement('button');
+    testButton.textContent = 'Test Email Template';
+    testButton.style.position = 'fixed';
+    testButton.style.bottom = '20px';
+    testButton.style.left = '20px';
+    testButton.style.zIndex = '9999';
+    testButton.style.padding = '12px 20px';
+    testButton.style.backgroundColor = '#4a2c82';
+    testButton.style.color = 'white';
+    testButton.style.border = 'none';
+    testButton.style.borderRadius = '5px';
+    testButton.style.cursor = 'pointer';
+    testButton.style.fontWeight = 'bold';
+    testButton.style.boxShadow = '0 4px 8px rgba(0,0,0,0.2)';
+    
+    // Hover effects
+    testButton.onmouseover = function() {
+        this.style.backgroundColor = '#5d3c96';
+        this.style.transform = 'translateY(-2px)';
+        this.style.boxShadow = '0 6px 12px rgba(0,0,0,0.3)';
+        this.style.transition = 'all 0.3s ease';
+    };
+    
+    testButton.onmouseout = function() {
+        this.style.backgroundColor = '#4a2c82';
+        this.style.transform = 'translateY(0)';
+        this.style.boxShadow = '0 4px 8px rgba(0,0,0,0.2)';
+        this.style.transition = 'all 0.3s ease';
+    };
+    
+    testButton.addEventListener('click', testEmailJSSetup);
+    document.body.appendChild(testButton);
+}
+
+// Test creating a button instance
+function checkPayPalStatus() {
+    console.log('Checking PayPal integration status...');
+    
+    // Check if PayPal is loaded
+    const isPayPalLoaded = window.paypal !== undefined;
+    console.log('PayPal SDK loaded:', isPayPalLoaded);
+    
+    if (isPayPalLoaded) {
+        console.log('PayPal object details:', {
+            hasButtons: typeof window.paypal.Buttons === 'function',
+            version: window.paypal.version,
+            availableComponents: Object.keys(window.paypal)
+        });
         
-        // Add hover effect
-        testButton.onmouseover = function() {
-            this.style.backgroundColor = '#6b42b8';
-            this.style.transform = 'translateY(-2px)';
-            this.style.boxShadow = '0 6px 12px rgba(0,0,0,0.3)';
-            this.style.transition = 'all 0.3s ease';
+        // Test creating a button instance
+        try {
+            const buttonInstance = window.paypal.Buttons();
+            console.log('Button instance created successfully:', buttonInstance !== undefined);
+            
+            // Check if render method is available
+            console.log('Render method available:', typeof buttonInstance.render === 'function');
+        } catch (error) {
+            console.error('Error creating button instance:', error);
+        }
+    }
+    
+    // Check client ID configuration
+    const scriptTag = document.querySelector('script[src*="paypal.com/sdk/js"]');
+    if (scriptTag) {
+        console.log('PayPal script tag found:', scriptTag.src);
+        console.log('Client ID:', scriptTag.src.match(/client-id=([^&]+)/)?.[1] || 'Not found');
+    } else {
+        console.log('PayPal script tag not found in DOM');
+    }
+    
+    showToast('PayPal status checked - see console for details', 'info');
+}
+
+// Function to show manual checkout option when PayPal is blocked
+function showManualCheckout() {
+    // Calculate total
+    const total = cart.reduce((sum, item) => sum + parseFloat(item.price), 0);
+    
+    // Create order summary
+    const orderSummary = cart.map(item => 
+        `${formatStyle(item.style)} T-shirt - Size: ${item.size}, Color: ${item.color} - $${parseFloat(item.price).toFixed(2)}`
+    ).join('\n');
+    
+    // Create a modal for the manual checkout
+    const modalContainer = document.createElement('div');
+    modalContainer.id = 'manualCheckoutModal';
+    modalContainer.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 2000;
+    `;
+    
+    modalContainer.innerHTML = `
+        <div style="background-color: white; max-width: 600px; width: 90%; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); padding: 1.5rem; max-height: 90vh; overflow-y: auto;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <h3 style="margin: 0; color: #333; font-size: 1.5rem;">Alternative Checkout</h3>
+                <button style="background: none; border: none; font-size: 1.5rem; cursor: pointer;" onclick="document.getElementById('manualCheckoutModal').remove()">×</button>
+            </div>
+            
+            <div style="margin-bottom: 1.5rem;">
+                <p>We've detected that PayPal checkout is being blocked by your browser. You can complete your order with these alternative options:</p>
+                
+                <div style="background-color: #f8f9fa; padding: 1rem; border-radius: 8px; margin: 1rem 0;">
+                    <h4 style="margin-top: 0; color: #333;">Your Order Summary</h4>
+                    <div style="margin-bottom: 1rem; white-space: pre-line;">${orderSummary}</div>
+                    <div style="font-weight: bold; font-size: 1.1rem; text-align: right;">Total: $${total.toFixed(2)}</div>
+                </div>
+                
+                <div style="margin-top: 1.5rem;">
+                    <h4 style="margin-top: 0; color: #333;">Option 1: Disable Ad Blocker</h4>
+                    <p>Temporarily disable your ad blocker or privacy extensions and try again with PayPal:</p>
+                    <ol style="margin-left: 1.5rem;">
+                        <li>Look for your ad blocker icon in your browser toolbar</li>
+                        <li>Click it and select "Pause" or "Disable for this site"</li>
+                        <li>Refresh the page and try the PayPal checkout again</li>
+                    </ol>
+                    <button class="btn btn-primary" style="width: 100%" onclick="document.getElementById('manualCheckoutModal').remove(); initializePayPalButton();">
+                        <i class="fas fa-redo"></i> Try PayPal Again
+                    </button>
+                </div>
+                
+                <div style="margin-top: 1.5rem;">
+                    <h4 style="margin-top: 0; color: #333;">Option 2: Email Order Request</h4>
+                    <p>Send your order details to our team by email:</p>
+                    <button class="btn btn-success" style="width: 100%" onclick="sendManualOrderRequest()">
+                        <i class="fas fa-envelope"></i> Email Order Request
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modalContainer);
+}
+
+// Function to email manual order request
+function sendManualOrderRequest() {
+    // Calculate total
+    const total = cart.reduce((sum, item) => sum + parseFloat(item.price), 0);
+    
+    // Create order summary for email
+    const orderItems = cart.map(item => {
+        return {
+            name: `${formatStyle(item.style)} T-shirt`,
+            description: `Size: ${item.size}, Color: ${item.color}`,
+            price: parseFloat(item.price).toFixed(2),
+            imageUrl: item.imageUrl
+        };
+    });
+    
+    // Create a manual order object
+    const manualOrder = {
+        items: orderItems,
+        total: total.toFixed(2),
+        paymentMethod: 'Manual Request',
+        date: new Date().toISOString()
+    };
+    
+    // Show loading overlay
+    showLoadingOverlay('Sending your order request...');
+    
+    // Send order email with manual checkout flag
+    sendOrderToEmail(manualOrder, true)
+        .then(() => {
+            hideLoadingOverlay();
+            
+            // Remove the manual checkout modal
+            const modal = document.getElementById('manualCheckoutModal');
+            if (modal) {
+                modal.remove();
+            }
+            
+            // Show success message
+            showToast('Your order request has been sent! We will contact you soon with payment instructions.', 'success');
+            
+            // Don't clear the cart yet - wait for manual payment
+        })
+        .catch(error => {
+            hideLoadingOverlay();
+            console.error('Error sending manual order request:', error);
+            showToast('There was a problem sending your order request. Please try again or contact us directly.', 'error');
+        });
+}
+
+// Function to dynamically load the PayPal SDK
+function loadPayPalScript() {
+    return new Promise((resolve, reject) => {
+        // If PayPal is already loaded, resolve immediately
+        if (window.paypal && window.paypal.Buttons) {
+            console.log('PayPal SDK already loaded, using existing instance');
+            resolve();
+            return;
+        }
+        
+        // Remove any existing PayPal scripts to avoid conflicts
+        const existingScripts = document.querySelectorAll('script[src*="paypal.com/sdk/js"]');
+        existingScripts.forEach(script => script.remove());
+        
+        // Use the client ID provided by the user
+        const clientId = "AW_c6BXCMWi5VtGN8v0JKcFGWF7We2jX4EVDUNXPk_b9_X745FIPCSzRmi0KrZAoR4eau38zCVaV_om_";
+        
+        console.log('Loading PayPal SDK with client ID:', clientId);
+        
+        // Create and append the script
+        const script = document.createElement('script');
+        script.src = `https://www.paypal.com/sdk/js?client-id=${clientId}&currency=USD&intent=capture`;
+        script.async = true;
+        
+        script.onload = () => {
+            console.log('PayPal SDK loaded successfully');
+            resolve();
         };
         
-        testButton.onmouseout = function() {
-            this.style.backgroundColor = '#4a2c82';
-            this.style.transform = 'translateY(0)';
-            this.style.boxShadow = '0 4px 8px rgba(0,0,0,0.2)';
-            this.style.transition = 'all 0.3s ease';
+        script.onerror = (error) => {
+            console.error('Failed to load PayPal SDK:', error);
+            reject(new Error('Failed to load PayPal SDK'));
+            
+            // Show manual checkout option as fallback
+            const paypalButtonContainer = document.getElementById('paypalButtonContainer');
+            if (paypalButtonContainer) {
+                paypalButtonContainer.innerHTML = `
+                    <div class="paypal-error">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <p>PayPal checkout unavailable</p>
+                        <button class="btn btn-primary retry-btn" onclick="initializePayPalButton()">
+                            <i class="fas fa-redo"></i> Try Again
+                        </button>
+                        <button class="btn btn-success" onclick="showManualCheckout()">
+                            <i class="fas fa-envelope"></i> Contact Us to Order
+                        </button>
+                    </div>
+                `;
+            }
         };
         
-        testButton.addEventListener('click', testEmailJSSetup);
-        document.body.appendChild(testButton);
+        document.body.appendChild(script);
     });
 }
+
+// Function to send invoice without payment
+function sendInvoiceWithoutPayment() {
+    if (cart.length === 0) {
+        showToast('Your cart is empty!', 'error');
+        return;
+    }
+    
+    // Prompt for customer email
+    const customerEmail = prompt("Please enter your email address to receive the invoice:");
+    
+    // Debug
+    console.log("Customer provided email:", customerEmail);
+    
+    // Validate email
+    if (!customerEmail || !customerEmail.includes('@')) {
+        showToast('Please provide a valid email address.', 'error');
+        return;
+    }
+    
+    showLoadingOverlay('Sending invoice...');
+    
+    const total = cart.reduce((sum, item) => sum + parseFloat(item.price), 0);
+    
+    // Format order items for the email directly
+    const itemsList = cart.map(item => `
+        <tr>
+            <td style="padding: 10px; border-bottom: 1px solid #e0e0e0;">
+                <strong>Custom ${formatStyle(item.style)} T-shirt</strong><br>
+                Size: ${item.size}, Color: ${item.color}
+            </td>
+            <td style="padding: 10px; border-bottom: 1px solid #e0e0e0; text-align: right;">
+                $${parseFloat(item.price).toFixed(2)}
+            </td>
+        </tr>
+    `).join('');
+    
+    // Simplified direct email sending to customer
+    const emailParams = {
+        to_name: 'Customer',
+        to_email: customerEmail,
+        email: customerEmail, // For backward compatibility
+        order_number: `INV-${Date.now()}`,
+        order_date: new Date().toLocaleString(),
+        payment_method: 'Invoice Request (No Payment)',
+        order_total: `$${total.toFixed(2)}`,
+        items_list: itemsList,
+        from_name: 'NextGenStudios',
+        subject: 'Your Invoice',
+        notification_type: 'Invoice Request',
+        is_manual_request: 'true'
+    };
+    
+    console.log("Invoice email parameters:", emailParams);
+    
+    // Check EmailJS configuration
+    console.log("EmailJS Config:", {
+        serviceId: config.emailjs.serviceId,
+        templateId: config.emailjs.customerTemplateId,
+        publicKey: emailjs._userID
+    });
+    
+    // Send email directly to customer
+    emailjs.send(config.emailjs.serviceId, config.emailjs.customerTemplateId, emailParams)
+        .then(function(response) {
+            console.log("Invoice email sent to customer:", response);
+            
+            // Now send notification to business
+            const businessParams = {
+                ...emailParams,
+                to_name: 'Shop Admin',
+                to_email: config.businessEmail,
+                email: config.businessEmail, // For backward compatibility
+                customer_email: customerEmail,
+                customer_name: 'Customer',
+                subject: 'New Invoice Request'
+            };
+            
+            return emailjs.send(config.emailjs.serviceId, config.emailjs.customerTemplateId, businessParams);
+        })
+        .then(function(response) {
+            console.log("Business notification sent:", response);
+            hideLoadingOverlay();
+            showToast('Invoice sent successfully!', 'success');
+            
+            // Close the cart modal
+            document.getElementById('cartModal').style.display = 'none';
+            
+            // Clear the cart
+            cart = [];
+            saveCart();
+            updateCartBadge();
+        })
+        .catch(function(error) {
+            console.error('Error sending invoice:', error);
+            console.error("Error details:", {
+                name: error.name,
+                message: error.message,
+                text: error.text,
+                status: error.status
+            });
+            
+            // Show more detailed error
+            let errorMessage = 'Failed to send invoice. Please try again.';
+            if (error.text) {
+                errorMessage += ' Error: ' + error.text;
+            } else if (error.message) {
+                errorMessage += ' Error: ' + error.message;
+            }
+            
+            hideLoadingOverlay();
+            showToast(errorMessage, 'error');
+        });
+}
+
+// Function to test invoice email specifically
+function testInvoiceEmail() {
+    // Show loading overlay
+    showLoadingOverlay("Testing invoice email...");
+    
+    // Prompt for test email
+    const testEmail = prompt("Enter email address for test:");
+    if (!testEmail || !testEmail.includes('@')) {
+        hideLoadingOverlay();
+        showToast('Please provide a valid email address.', 'error');
+        return;
+    }
+    
+    // Create a sample order 
+    const testOrder = {
+        items: [
+            {
+                name: "Custom Regular T-shirt",
+                style: "regular",
+                size: "L",
+                color: "Black",
+                price: "25.99"
+            }
+        ],
+        total: 25.99,
+        paymentMethod: 'Test Invoice',
+        orderDate: new Date().toLocaleString(),
+        date: new Date().toISOString(),
+        customer: {
+            email: testEmail,
+            name: 'Test Customer'
+        }
+    };
+    
+    console.log("Testing invoice email with order:", JSON.stringify(testOrder, null, 2));
+    
+    // Format order items for the email
+    const itemsList = testOrder.items.map(item => `
+        <tr>
+            <td style="padding: 10px; border-bottom: 1px solid #e0e0e0;">
+                <strong>${item.name}</strong><br>
+                Size: ${item.size}, Color: ${item.color}
+            </td>
+            <td style="padding: 10px; border-bottom: 1px solid #e0e0e0; text-align: right;">
+                $${parseFloat(item.price).toFixed(2)}
+            </td>
+        </tr>
+    `).join('');
+    
+    // Format email parameters
+    const emailParams = {
+        to_name: testOrder.customer.name,
+        to_email: testOrder.customer.email,
+        order_number: `TEST-${Date.now()}`,
+        order_date: new Date(testOrder.date).toLocaleString(),
+        payment_method: testOrder.paymentMethod,
+        order_total: `$${testOrder.total.toFixed(2)}`,
+        items_list: itemsList,
+        from_name: 'NextGenStudios',
+        subject: 'Test Invoice Email',
+        notification_type: 'Test Invoice',
+        is_manual_request: 'true'
+    };
+    
+    console.log("Email parameters:", emailParams);
+    
+    // Check if EmailJS is properly initialized
+    console.log("EmailJS Config:", {
+        serviceId: config.emailjs.serviceId,
+        templateId: config.emailjs.customerTemplateId,
+        publicKey: emailjs._userID // Check if the public key is set
+    });
+    
+    // Send test email directly
+    emailjs.send(config.emailjs.serviceId, config.emailjs.customerTemplateId, emailParams)
+        .then(function(response) {
+            console.log("Test invoice email sent successfully:", response);
+            hideLoadingOverlay();
+            showToast(`Test invoice email sent to ${testEmail}`, 'success');
+        })
+        .catch(function(error) {
+            console.error("Test invoice email failed:", error);
+            console.error("Error details:", {
+                name: error.name,
+                message: error.message,
+                text: error.text,
+                status: error.status,
+                stack: error.stack
+            });
+            hideLoadingOverlay();
+            showToast(`Test failed: ${error.name || ''} ${error.message || ''} ${error.text || ''}`, 'error');
+        });
+}
+
+// Add a test invoice button in non-production environments
+if (location.hostname === 'localhost' || location.hostname === '127.0.0.1' || location.hostname.includes('preview')) {
+    // Create invoice test button
+    const testInvoiceButton = document.createElement('button');
+    testInvoiceButton.innerText = 'Test Invoice Email';
+    testInvoiceButton.style.position = 'fixed';
+    testInvoiceButton.style.bottom = '70px';
+    testInvoiceButton.style.right = '20px';
+    testInvoiceButton.style.zIndex = '9999';
+    testInvoiceButton.style.padding = '10px';
+    testInvoiceButton.style.backgroundColor = '#8e44ad';
+    testInvoiceButton.style.color = 'white';
+    testInvoiceButton.style.border = 'none';
+    testInvoiceButton.style.borderRadius = '4px';
+    testInvoiceButton.style.cursor = 'pointer';
+    
+    // Add click event
+    testInvoiceButton.addEventListener('click', testInvoiceEmail);
+    
+    // Add to document
+    document.body.appendChild(testInvoiceButton);
+}
+
+// Function for simple EmailJS test (minimal parameters)
+function testSimpleEmail() {
+    // Create simplified test parameters with explicit values for all fields
+    const simpleParams = {
+        // Customer info
+        to_name: "Test Customer",
+        to_email: "test@example.com",
+        from_name: "NextGenStudios",
+        subject: "Test Order Confirmation",
+        
+        // Customer details - explicit values
+        customer_name: "Test Customer",
+        customer_email: "test@example.com",
+        customer_address: "123 Test Street, Test City, Test Country",
+        
+        // Order info - explicit values
+        order_id: "ORD-" + Date.now(),
+        order_date: new Date().toLocaleString(),
+        payment_method: "PayPal",
+        order_total: "29.99",
+        
+        // Product details - explicit values with clear content
+        product_style: "Premium",
+        product_size: "XL",
+        product_color: "Black",
+        product_price: "29.99",
+        
+        // Images - use public URLs for testing
+        product_image: "https://via.placeholder.com/200x200?text=Design",
+        mockup_image: "https://via.placeholder.com/200x200?text=Mockup",
+        
+        // Other required fields
+        notification_type: "Order Confirmation",
+        is_manual_request: "no",
+        
+        // Order summary
+        order_summary: "Item 1:\nProduct: Custom Premium T-shirt\nSize: XL\nColor: Black\nPrice: $29.99"
+    };
+    
+    // Prompt for email to test with
+    const testEmail = prompt("Enter email address for test (leave empty to use test@example.com):");
+    if (testEmail && testEmail.includes('@')) {
+        simpleParams.to_email = testEmail;
+        simpleParams.customer_email = testEmail;
+    }
+    
+    showLoadingOverlay('Sending test email...');
+    
+    console.log('Sending test email with params:', JSON.stringify(simpleParams));
+    
+    // Send the test email with direct template ID
+    emailjs.send(
+        config.emailjs.serviceId,
+        'template_pchevsq', // Use template ID directly 
+        simpleParams,
+        config.emailjs.userId
+    )
+    .then((response) => {
+        console.log('Test email sent successfully:', response);
+        hideLoadingOverlay();
+        showModal('Test Email Sent', 'A test email has been sent successfully. Please check your inbox.');
+    })
+    .catch((error) => {
+        console.error('Failed to send test email:', error);
+        hideLoadingOverlay();
+        showModal('Test Email Failed', 'Failed to send test email. Error: ' + JSON.stringify(error));
+    });
+}
+
+// Convert an image URL to a data URL for email attachment
+function convertImageToAttachment(imageUrl) {
+    return new Promise((resolve, reject) => {
+        try {
+            // If it's already a data URL, just return it
+            if (imageUrl.startsWith('data:')) {
+                resolve(imageUrl);
+                return;
+            }
+            
+            // Create a new image element
+            const img = new Image();
+            
+            // Setup onload handler
+            img.onload = function() {
+                try {
+                    // Create canvas and get context
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    
+                    // Set canvas dimensions to match image
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    
+                    // Draw image on canvas
+                    ctx.drawImage(img, 0, 0);
+                    
+                    // Convert to data URL
+                    const dataUrl = canvas.toDataURL('image/png');
+                    resolve(dataUrl);
+                } catch (err) {
+                    console.error('Error converting image to data URL:', err);
+                    reject(err);
+                }
+            };
+            
+            // Setup error handler
+            img.onerror = function(err) {
+                console.error('Error loading image for conversion:', err);
+                reject(new Error('Failed to load image for conversion'));
+            };
+            
+            // Set crossOrigin for external images (if it's a remote URL)
+            if (imageUrl.startsWith('http')) {
+                img.crossOrigin = 'anonymous';
+            }
+            
+            // Start loading the image
+            img.src = imageUrl;
+        } catch (err) {
+            console.error('Error in image conversion setup:', err);
+            reject(err);
+        }
+    });
+}
+
+// Process item images for email
+async function processItemImagesForEmail(items) {
+    try {
+        // Create a modified copy of the items
+        const processedItems = JSON.parse(JSON.stringify(items));
+        
+        // Process each item
+        for (let i = 0; i < processedItems.length; i++) {
+            const item = processedItems[i];
+            
+            // Handle mockup/preview image
+            if (item.previewImageUrl) {
+                try {
+                    const dataUrl = await convertImageToAttachment(item.previewImageUrl);
+                    item.previewImageDataUrl = dataUrl;
+                } catch (err) {
+                    console.warn('Could not convert preview image, falling back to text-only', err);
+                }
+            }
+            
+            // Handle original design image
+            if (item.imageUrl) {
+                try {
+                    const dataUrl = await convertImageToAttachment(item.imageUrl);
+                    item.imageDataUrl = dataUrl;
+                } catch (err) {
+                    console.warn('Could not convert design image, falling back to text-only', err);
+                }
+            }
+        }
+        
+        return processedItems;
+    } catch (err) {
+        console.error('Error processing images for email:', err);
+        return items; // Return original items on error
+    }
+}
+
+// Add this after the testSimpleEmail function
+
+// Function for bare bones email test with minimal parameters
+function testBasicEmail() {
+    // Most minimal parameters possible
+    const basicParams = {
+        to_name: "Test Customer",
+        to_email: "test@example.com",
+        product_style: "Premium",
+        product_size: "XL",
+        product_color: "Black",
+        product_price: "29.99"
+    };
+    
+    // Prompt for email to test with
+    const testEmail = prompt("Enter email address for test (leave empty to use test@example.com):");
+    if (testEmail && testEmail.includes('@')) {
+        basicParams.to_email = testEmail;
+    }
+    
+    showLoadingOverlay('Sending basic test email...');
+    
+    console.log('Sending basic test email with params:', JSON.stringify(basicParams));
+    
+    // Show message about creating a basic template
+    alert("Important: For this test to work, create a new template in EmailJS with ONLY the variables: to_name, product_style, product_size, product_color, and product_price. You can use the basic_email_template.html file for this.");
+    
+    // Prompt for template ID
+    const templateId = prompt("Enter your EmailJS template ID (leave empty to use default 'template_pchevsq'):", "template_pchevsq");
+    const finalTemplateId = templateId && templateId.trim() !== "" ? templateId : "template_pchevsq";
+    
+    // Send the test email with direct template ID and minimal parameters
+    emailjs.send(
+        config.emailjs.serviceId,
+        finalTemplateId, 
+        basicParams,
+        config.emailjs.userId
+    )
+    .then((response) => {
+        console.log('Basic test email sent successfully:', response);
+        hideLoadingOverlay();
+        showModal('Basic Test Email Sent', 'A basic test email has been sent successfully. Please check your inbox.');
+    })
+    .catch((error) => {
+        console.error('Failed to send basic test email:', error);
+        hideLoadingOverlay();
+        showModal('Basic Test Email Failed', 'Failed to send basic test email. Error: ' + JSON.stringify(error));
+    });
+}
+
+// Add a test button for the basic email test in non-production environments
+if (location.hostname === 'localhost' || location.hostname === '127.0.0.1' || location.hostname.includes('preview')) {
+    // Create basic test button
+    const basicTestButton = document.createElement('button');
+    basicTestButton.innerText = 'Basic Email Test';
+    basicTestButton.style.position = 'fixed';
+    basicTestButton.style.bottom = '170px';
+    basicTestButton.style.right = '20px';
+    basicTestButton.style.zIndex = '9999';
+    basicTestButton.style.padding = '10px';
+    basicTestButton.style.backgroundColor = '#2ecc71';
+    basicTestButton.style.color = 'white';
+    basicTestButton.style.border = 'none';
+    basicTestButton.style.borderRadius = '4px';
+    basicTestButton.style.cursor = 'pointer';
+    
+    // Add click event
+    basicTestButton.addEventListener('click', testBasicEmail);
+    
+    // Add to document
+    document.body.appendChild(basicTestButton);
+}
+
+// Convert an image URL to a data URL for email attachment
