@@ -129,6 +129,9 @@ function initializePayPalButton() {
                         value: total.toFixed(2)
                     },
                     description: 'Custom T-shirt from Fantasy Prompt Generator',
+                    payee: {
+                        email_address: 'unkownrb@hotmail.com'
+                    },
                     items: cart.map(item => ({
                         name: `Custom ${formatStyle(item.style)} T-shirt`,
                         unit_amount: {
@@ -1865,7 +1868,10 @@ function proceedToCheckout() {
                         amount: {
                             value: total.toFixed(2)
                         },
-                        description: 'Custom T-shirt from Fantasy Prompt Generator'
+                        description: 'Custom T-shirt from Fantasy Prompt Generator',
+                        payee: {
+                            email_address: 'unkownrb@hotmail.com'
+                        }
                     }]
                 });
             },
@@ -2115,20 +2121,30 @@ function sendOrderToEmail(order) {
         checkoutModal.appendChild(loadingIndicator);
     }
     
-    // Prepare parameters for EmailJS
-    // EmailJS requires specific parameter names for the recipient address 
-    const templateParams = {
+    // Create customer-focused message
+    const customerMessage = `
+        <p style="margin-bottom: 15px;">Thank you for your order! We've received your payment and are processing your custom merchandise.</p>
+        <p style="margin-bottom: 25px;">Your items will be shipped to the address provided. If you have any questions, please contact us at aicardgen_business@outlook.com</p>
+    `;
+    
+    // Create business-focused message
+    const businessMessage = `
+        <p style="margin-bottom: 15px;">A new order has been received and requires processing.</p>
+        <p style="margin-bottom: 25px;">Please review the order details below and prepare for shipping.</p>
+    `;
+    
+    // Prepare parameters for EmailJS - Customer Receipt
+    const customerTemplateParams = {
         // Standard EmailJS email parameters
         to_name: order.customer.name,
-        to_email: order.customer.email, // Send to customer instead of business email
-        cc_email: 'aicardgen_business@outlook.com', // CC to business email
+        to_email: order.customer.email, // Primary recipient is customer
         from_name: 'AI Card Generator',
         from_email: 'no-reply@aicardgen.com',
         reply_to: 'aicardgen_business@outlook.com',
         subject: `Your Order #${order.id} Confirmation`,
         
         // Template content variables
-        message: orderHTML,
+        message: customerMessage + orderHTML,
         order_id: order.id,
         order_date: new Date(order.date).toLocaleString(),
         customer_name: order.customer.name,
@@ -2138,18 +2154,54 @@ function sendOrderToEmail(order) {
         order_total: order.total.toFixed(2)
     };
     
-    console.log('Sending email with parameters:', templateParams);
+    // Prepare parameters for EmailJS - Business Notification
+    const businessTemplateParams = {
+        // Standard EmailJS email parameters
+        to_name: 'Merchandise Team',
+        to_email: 'aicardgen_business@outlook.com', // Business email
+        from_name: 'AI Card Generator Shop',
+        from_email: 'no-reply@aicardgen.com',
+        reply_to: order.customer.email,
+        subject: `New Order #${order.id} Received`,
+        
+        // Template content variables
+        message: businessMessage + orderHTML,
+        order_id: order.id,
+        order_date: new Date(order.date).toLocaleString(),
+        customer_name: order.customer.name,
+        customer_email: order.customer.email,
+        customer_address: order.customer.address,
+        payment_method: order.paymentMethod,
+        order_total: order.total.toFixed(2)
+    };
     
-    // Send the email using EmailJS with the template_pchevsq template
-    emailjs.send('service_fcsd7gr', 'template_pchevsq', templateParams)
+    console.log('Sending customer email with parameters:', customerTemplateParams);
+    console.log('Sending business email with parameters:', businessTemplateParams);
+    
+    // Send the customer receipt email
+    emailjs.send('service_fcsd7gr', 'template_pchevsq', customerTemplateParams)
         .then(function(response) {
-            console.log('Email successfully sent!', response);
-            if (checkoutModal) {
-                checkoutModal.remove();
-            }
-            showOrderSuccessMessage(order.paymentMethod);
+            console.log('Customer email successfully sent!', response);
+            
+            // Then send the business notification email
+            emailjs.send('service_fcsd7gr', 'template_pchevsq', businessTemplateParams)
+                .then(function(response) {
+                    console.log('Business email successfully sent!', response);
+                    if (checkoutModal) {
+                        checkoutModal.remove();
+                    }
+                    showOrderSuccessMessage(order.paymentMethod);
+                }, function(error) {
+                    console.error('Business email sending failed:', error);
+                    // Still show success to customer
+                    if (checkoutModal) {
+                        checkoutModal.remove();
+                    }
+                    showOrderSuccessMessage(order.paymentMethod);
+                });
+                
         }, function(error) {
-            console.error('Email sending failed:', error);
+            console.error('Customer email sending failed:', error);
             // Still show success to customer, but log the error
             if (checkoutModal) {
                 checkoutModal.remove();
