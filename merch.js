@@ -104,10 +104,57 @@ function initCart() {
 // Initialize PayPal button in the cart
 function initializePayPalButton() {
     const paypalButtonContainer = document.getElementById('paypalButtonContainer');
-    if (!paypalButtonContainer || !window.paypal) return;
+    if (!paypalButtonContainer) return;
     
     // Clear any existing buttons
     paypalButtonContainer.innerHTML = '';
+    
+    // Add a nice container for PayPal button
+    paypalButtonContainer.innerHTML = `
+        <div class="paypal-button-wrapper">
+            <div id="paypal-button-container"></div>
+            <div class="payment-security-badge">
+                <i class="fas fa-shield-alt"></i> Secure payment via PayPal
+            </div>
+        </div>
+    `;
+    
+    // Add necessary styles
+    if (!document.getElementById('paypal-button-styles')) {
+        const styleEl = document.createElement('style');
+        styleEl.id = 'paypal-button-styles';
+        styleEl.textContent = `
+            .paypal-button-wrapper {
+                margin-top: 1rem;
+                padding: 0.75rem;
+                background-color: #f5f7fa;
+                border-radius: 8px;
+                border: 1px solid #e0e6ed;
+            }
+            
+            .payment-security-badge {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                margin-top: 0.75rem;
+                font-size: 0.85rem;
+                color: var(--text-light);
+            }
+            
+            .payment-security-badge i {
+                margin-right: 6px;
+                color: #0070ba;
+            }
+        `;
+        document.head.appendChild(styleEl);
+    }
+    
+    // Wait for PayPal script to be ready
+    if (!window.paypal) {
+        console.log('PayPal script not loaded, waiting for it to load...');
+        setTimeout(initializePayPalButton, 500);
+        return;
+    }
     
     // Calculate total
     const total = cart.reduce((sum, item) => sum + parseFloat(item.price), 0);
@@ -147,7 +194,15 @@ function initializePayPalButton() {
         
         onApprove: function(data, actions) {
             // Show loading state
-            paypalButtonContainer.innerHTML = '<div style="text-align: center; padding: 10px;"><i class="fas fa-spinner fa-spin"></i> Processing payment...</div>';
+            const paypalBtn = document.getElementById('paypal-button-container');
+            if (paypalBtn) {
+                paypalBtn.innerHTML = `
+                    <div style="display: flex; align-items: center; justify-content: center; padding: 1rem;">
+                        <div class="loading-spinner" style="width: 24px; height: 24px; margin-right: 10px;"></div>
+                        <span>Processing payment...</span>
+                    </div>
+                `;
+            }
             
             // Capture the funds
             return actions.order.capture().then(function(details) {
@@ -178,9 +233,17 @@ function initializePayPalButton() {
         
         onError: function(err) {
             console.error('PayPal error:', err);
-            paypalButtonContainer.innerHTML = '<div style="color: #d32f2f; padding: 10px;">PayPal error. Please try again or use another payment method.</div>';
+            const paypalBtn = document.getElementById('paypal-button-container');
+            if (paypalBtn) {
+                paypalBtn.innerHTML = `
+                    <div style="color: #d32f2f; padding: 1rem; text-align: center; background-color: rgba(211, 47, 47, 0.1); border-radius: 6px;">
+                        <i class="fas fa-exclamation-triangle" style="margin-right: 8px;"></i>
+                        PayPal error. Please try again or use another payment method.
+                    </div>
+                `;
+            }
         }
-    }).render(paypalButtonContainer);
+    }).render('#paypal-button-container');
 }
 
 // Add custom t-shirt to cart
@@ -2101,23 +2164,16 @@ function sendOrderToEmail(order) {
         </table>
     `;
     
-    // Show loading indicator if in checkout modal
+    // Create loading overlay while email is sent
     const checkoutModal = document.getElementById('checkoutModal');
     if (checkoutModal) {
         const loadingIndicator = document.createElement('div');
-        loadingIndicator.className = 'loading-overlay';
-        loadingIndicator.innerHTML = '<div class="loading-spinner"></div><p>Processing your order...</p>';
-        loadingIndicator.style.position = 'absolute';
-        loadingIndicator.style.top = '0';
-        loadingIndicator.style.left = '0';
-        loadingIndicator.style.width = '100%';
-        loadingIndicator.style.height = '100%';
-        loadingIndicator.style.background = 'rgba(255,255,255,0.9)';
-        loadingIndicator.style.display = 'flex';
-        loadingIndicator.style.flexDirection = 'column';
-        loadingIndicator.style.justifyContent = 'center';
-        loadingIndicator.style.alignItems = 'center';
-        loadingIndicator.style.zIndex = '1000';
+        loadingIndicator.className = 'loading-overlay fade-in';
+        loadingIndicator.innerHTML = `
+            <div class="loading-spinner"></div>
+            <p>Processing your order...</p>
+            <span style="font-size: 0.9rem; margin-top: 0.5rem; color: var(--text-light);">This may take a few moments</span>
+        `;
         checkoutModal.appendChild(loadingIndicator);
     }
     
@@ -2137,7 +2193,7 @@ function sendOrderToEmail(order) {
     const customerTemplateParams = {
         // Standard EmailJS email parameters
         to_name: order.customer.name,
-        to_email: order.customer.email, // Primary recipient is customer
+        email: order.customer.email, // Changed from to_email to email to match template
         from_name: 'AI Card Generator',
         from_email: 'no-reply@aicardgen.com',
         reply_to: 'aicardgen_business@outlook.com',
@@ -2158,7 +2214,7 @@ function sendOrderToEmail(order) {
     const businessTemplateParams = {
         // Standard EmailJS email parameters
         to_name: 'Merchandise Team',
-        to_email: 'aicardgen_business@outlook.com', // Business email
+        email: 'aicardgen_business@outlook.com', // Changed from to_email to email to match template
         from_name: 'AI Card Generator Shop',
         from_email: 'no-reply@aicardgen.com',
         reply_to: order.customer.email,
@@ -2216,37 +2272,267 @@ function sendOrderToEmail(order) {
 function showOrderSuccessMessage(paymentMethod) {
     // Create success modal
     const successModal = document.createElement('div');
-    successModal.className = 'cart-modal';
+    successModal.className = 'cart-modal fade-in';
     successModal.style.display = 'flex';
     successModal.id = 'successModal';
     
     successModal.innerHTML = `
-        <div class="cart-content" style="text-align: center; max-width: 400px;">
-            <div style="font-size: 4rem; color: var(--success); margin-bottom: 1rem;">
-                <i class="fas fa-check-circle"></i>
+        <div class="cart-content success-content">
+            <div class="success-icon">
+                <svg class="checkmark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52">
+                    <circle class="checkmark-circle" cx="26" cy="26" r="25" fill="none"/>
+                    <path class="checkmark-check" fill="none" d="M14.1 27.2l7.1 7.2 16.7-16.8"/>
+                </svg>
             </div>
-            <h2 style="color: var(--primary); margin-bottom: 1rem;">Order Successful!</h2>
-            <p style="margin-bottom: 1rem;">Thank you for your order. Payment completed via ${paymentMethod}.</p>
-            <p style="margin-bottom: 2rem;">Your order has been sent to our team and we'll contact you soon at your email address.</p>
-            <button id="closeSuccess" class="checkout-btn">
-                Continue Shopping
+            <h2 class="success-title">Order Successful!</h2>
+            <div class="success-message">
+                <p>Thank you for your order! Your payment via <strong>${paymentMethod}</strong> has been processed successfully.</p>
+                <p>Your order confirmation has been sent to your email address.</p>
+                <p>Our team will contact you soon about your order status.</p>
+            </div>
+            <div class="order-number">
+                <span>Order #${Date.now().toString().slice(-8)}</span>
+            </div>
+            <button id="closeSuccess" class="checkout-btn pulse-animation">
+                <i class="fas fa-shopping-bag"></i> Continue Shopping
             </button>
+            <div class="support-info">
+                <p>Questions? Contact us at <a href="mailto:aicardgen_business@outlook.com">aicardgen_business@outlook.com</a></p>
+            </div>
         </div>
     `;
     
+    // Add styles if they don't exist yet
+    if (!document.getElementById('success-modal-styles')) {
+        const styleEl = document.createElement('style');
+        styleEl.id = 'success-modal-styles';
+        styleEl.textContent = `
+            .success-content {
+                text-align: center;
+                max-width: 480px;
+                padding: 2rem;
+                border-radius: 12px;
+                box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+            }
+            
+            .success-icon {
+                width: 100px;
+                height: 100px;
+                margin: 0 auto 1.5rem;
+            }
+            
+            .checkmark {
+                width: 100%;
+                height: 100%;
+                display: block;
+            }
+            
+            .checkmark-circle {
+                stroke-dasharray: 166;
+                stroke-dashoffset: 166;
+                stroke-width: 2;
+                stroke-miterlimit: 10;
+                stroke: var(--success, #4CAF50);
+                fill: none;
+                animation: stroke 0.6s cubic-bezier(0.65, 0, 0.45, 1) forwards;
+            }
+            
+            .checkmark-check {
+                transform-origin: 50% 50%;
+                stroke-dasharray: 48;
+                stroke-dashoffset: 48;
+                stroke-width: 3;
+                stroke: var(--success, #4CAF50);
+                animation: stroke 0.3s cubic-bezier(0.65, 0, 0.45, 1) 0.6s forwards;
+            }
+            
+            @keyframes stroke {
+                100% {
+                    stroke-dashoffset: 0;
+                }
+            }
+            
+            .success-title {
+                color: var(--primary);
+                margin-bottom: 1.5rem;
+                font-size: 2rem;
+                font-weight: 700;
+                animation: fadeInUp 0.8s ease forwards;
+            }
+            
+            .success-message {
+                margin-bottom: 2rem;
+                line-height: 1.6;
+                color: var(--text);
+                animation: fadeInUp 1s ease forwards;
+            }
+            
+            .success-message p {
+                margin-bottom: 0.75rem;
+            }
+            
+            .order-number {
+                margin-bottom: 2rem;
+                padding: 0.75rem 1.5rem;
+                background-color: var(--secondary);
+                border-radius: 8px;
+                display: inline-block;
+                font-weight: 600;
+                animation: fadeInUp 1.2s ease forwards;
+            }
+            
+            .support-info {
+                margin-top: 1.5rem;
+                font-size: 0.9rem;
+                color: var(--text-light);
+                animation: fadeInUp 1.4s ease forwards;
+            }
+            
+            .support-info a {
+                color: var(--primary);
+                text-decoration: none;
+                font-weight: 500;
+            }
+            
+            .support-info a:hover {
+                text-decoration: underline;
+            }
+            
+            #closeSuccess {
+                animation: fadeInUp 1.3s ease forwards;
+            }
+            
+            @keyframes fadeInUp {
+                from {
+                    opacity: 0;
+                    transform: translateY(20px);
+                }
+                to {
+                    opacity: 1;
+                    transform: translateY(0);
+                }
+            }
+            
+            .loading-overlay {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(255,255,255,0.9);
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+                z-index: 1000;
+                border-radius: 12px;
+            }
+            
+            .loading-spinner {
+                display: inline-block;
+                width: 50px;
+                height: 50px;
+                border: 3px solid rgba(74, 44, 130, 0.2);
+                border-radius: 50%;
+                border-top-color: var(--primary, #4a2c82);
+                animation: spin 1s ease-in-out infinite;
+                margin-bottom: 1rem;
+            }
+            
+            .loading-overlay p {
+                margin-top: 1rem;
+                font-weight: 500;
+                color: var(--primary);
+            }
+            
+            @keyframes spin {
+                to { transform: rotate(360deg); }
+            }
+        `;
+        document.head.appendChild(styleEl);
+    }
+    
     document.body.appendChild(successModal);
     
-    // Close success modal and reset cart
-    document.getElementById('closeSuccess').addEventListener('click', function() {
-        document.body.removeChild(successModal);
-        if (document.getElementById('cartModal')) {
-            document.getElementById('cartModal').style.display = 'none';
+    // Add confetti animation
+    if (typeof confetti !== 'undefined') {
+        confetti({
+            particleCount: 100,
+            spread: 70,
+            origin: { y: 0.6 }
+        });
+    } else {
+        // Create a simple confetti fallback if the library isn't available
+        const confettiContainer = document.createElement('div');
+        confettiContainer.style.position = 'fixed';
+        confettiContainer.style.top = '0';
+        confettiContainer.style.left = '0';
+        confettiContainer.style.width = '100%';
+        confettiContainer.style.height = '100%';
+        confettiContainer.style.pointerEvents = 'none';
+        confettiContainer.style.zIndex = '1001';
+        document.body.appendChild(confettiContainer);
+        
+        // Create some confetti elements
+        const colors = ['#4a2c82', '#6b42b8', '#9671d9', '#2196F3', '#4CAF50', '#FF9800'];
+        for (let i = 0; i < 100; i++) {
+            const confetti = document.createElement('div');
+            confetti.style.position = 'absolute';
+            confetti.style.width = Math.random() * 10 + 5 + 'px';
+            confetti.style.height = Math.random() * 5 + 5 + 'px';
+            confetti.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+            confetti.style.opacity = Math.random() + 0.5;
+            confetti.style.transform = `rotate(${Math.random() * 360}deg)`;
+            confetti.style.top = '-10px';
+            confetti.style.left = Math.random() * 100 + '%';
+            
+            // Add animation
+            confetti.style.animation = `fall ${Math.random() * 3 + 2}s linear forwards`;
+            confettiContainer.appendChild(confetti);
         }
         
-        // Clear cart
-        cart = [];
-        saveCart();
-        updateCartBadge();
+        // Add keyframes for the animation
+        const styleSheet = document.createElement('style');
+        styleSheet.textContent = `
+            @keyframes fall {
+                to {
+                    transform: translateY(100vh) rotate(${Math.random() * 360 + 180}deg);
+                    opacity: 0;
+                }
+            }
+        `;
+        document.head.appendChild(styleSheet);
+        
+        // Remove the confetti after 4 seconds
+        setTimeout(() => {
+            document.body.removeChild(confettiContainer);
+        }, 4000);
+    }
+    
+    // Close success modal and reset cart with animation
+    document.getElementById('closeSuccess').addEventListener('click', function() {
+        successModal.style.opacity = '0';
+        successModal.style.transform = 'scale(0.9)';
+        successModal.style.transition = 'all 0.3s ease-out';
+        
+        setTimeout(() => {
+            document.body.removeChild(successModal);
+            if (document.getElementById('cartModal')) {
+                document.getElementById('cartModal').style.display = 'none';
+            }
+            
+            // Clear cart
+            cart = [];
+            saveCart();
+            updateCartBadge();
+        }, 300);
+    });
+    
+    // Also close when clicking outside
+    successModal.addEventListener('click', function(event) {
+        if (event.target === this) {
+            document.getElementById('closeSuccess').click();
+        }
     });
 }
 
