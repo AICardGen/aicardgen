@@ -2049,91 +2049,108 @@ function proceedToCheckout() {
 
 // Send order to email 
 function sendOrderToEmail(order) {
-    // In a real app, this would send to a server endpoint that emails the order
-    console.log('Sending order to aicardgen_business@outlook.com:', order);
-    
-    // Create an order representation with the design images
+    // Create a professional-looking order representation with the design images
     let orderHTML = `
-        <h2>New Order #${order.id}</h2>
-        <p><strong>Date:</strong> ${new Date(order.date).toLocaleString()}</p>
-        <p><strong>Customer:</strong> ${order.customer.name}</p>
-        <p><strong>Email:</strong> ${order.customer.email}</p>
-        <p><strong>Shipping Address:</strong> ${order.customer.address}</p>
-        <p><strong>Payment Method:</strong> ${order.paymentMethod}</p>
-        <h3>Items:</h3>
-        <table border="1" cellpadding="10" style="border-collapse: collapse;">
-            <tr>
-                <th>Item</th>
-                <th>Size</th>
-                <th>Color</th>
-                <th>Price</th>
-                <th>Design</th>
-                <th>Mockup</th>
-            </tr>
+        <table>
+            <thead>
+                <tr>
+                    <th>Item</th>
+                    <th>Size</th>
+                    <th>Color</th>
+                    <th>Price</th>
+                    <th>Design</th>
+                    <th>Mockup</th>
+                </tr>
+            </thead>
+            <tbody>
     `;
     
-    // Add each item to the email
+    // Add each item to the email with improved styling
     order.items.forEach(item => {
         orderHTML += `
             <tr>
-                <td>Custom ${formatStyle(item.style)} T-shirt</td>
+                <td><strong>Custom ${formatStyle(item.style)} T-shirt</strong></td>
                 <td>${item.size}</td>
                 <td>${item.color}</td>
                 <td>$${parseFloat(item.price).toFixed(2)}</td>
                 <td>
-                    <img src="${item.imageUrl}" width="100" alt="Design">
+                    <img src="${item.imageUrl}" width="100" alt="Design" style="border-radius: 4px; border: 1px solid #eee;">
                 </td>
                 <td>
-                    <img src="${item.previewImageUrl || item.imageUrl}" width="100" alt="T-shirt Mockup">
+                    <img src="${item.previewImageUrl || item.imageUrl}" width="100" alt="T-shirt Mockup" style="border-radius: 4px; border: 1px solid #eee;">
                 </td>
             </tr>
         `;
     });
     
+    // Add order total row
     orderHTML += `
+            </tbody>
+            <tfoot>
+                <tr class="total-row">
+                    <td colspan="3" style="text-align: right;"><strong>Order Total:</strong></td>
+                    <td colspan="3"><strong>$${order.total.toFixed(2)}</strong></td>
+                </tr>
+            </tfoot>
         </table>
-        <p><strong>Total:</strong> $${order.total.toFixed(2)}</p>
-        <p>Please process this order and contact the customer for any additional information.</p>
     `;
     
-    // In a real implementation, this would send via AJAX to a server endpoint
-    // that would handle the actual email sending to aicardgen_business@outlook.com
-    // Example implementation:
-    /*
-    fetch('/api/send-order-email', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            to: 'aicardgen_business@outlook.com',
-            subject: `New Order #${order.id}`,
-            htmlContent: orderHTML,
-            orderData: order
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
-        console.log('Email sent successfully:', data);
-        showOrderSuccessMessage(order.paymentMethod);
-    })
-    .catch(error => {
-        console.error('Error sending email:', error);
-        // Still show success to customer, but log the error
-        showOrderSuccessMessage(order.paymentMethod);
-    });
-    */
+    // Show loading indicator if in checkout modal
+    const checkoutModal = document.getElementById('checkoutModal');
+    if (checkoutModal) {
+        const loadingIndicator = document.createElement('div');
+        loadingIndicator.className = 'loading-overlay';
+        loadingIndicator.innerHTML = '<div class="loading-spinner"></div><p>Processing your order...</p>';
+        loadingIndicator.style.position = 'absolute';
+        loadingIndicator.style.top = '0';
+        loadingIndicator.style.left = '0';
+        loadingIndicator.style.width = '100%';
+        loadingIndicator.style.height = '100%';
+        loadingIndicator.style.background = 'rgba(255,255,255,0.9)';
+        loadingIndicator.style.display = 'flex';
+        loadingIndicator.style.flexDirection = 'column';
+        loadingIndicator.style.justifyContent = 'center';
+        loadingIndicator.style.alignItems = 'center';
+        loadingIndicator.style.zIndex = '1000';
+        checkoutModal.appendChild(loadingIndicator);
+    }
     
-    // For simulation purposes, we'll just log it and proceed with the order success flow
-    console.log('Email HTML content:', orderHTML);
+    // Prepare parameters for EmailJS
+    // The template_params object should match your EmailJS template variables
+    const templateParams = {
+        to_email: 'aicardgen_business@outlook.com',
+        from_name: order.customer.name,
+        from_email: order.customer.email,
+        subject: `New Order #${order.id}`,
+        message: orderHTML,
+        order_id: order.id,
+        order_date: new Date(order.date).toLocaleString(),
+        customer_name: order.customer.name,
+        customer_email: order.customer.email,
+        customer_address: order.customer.address,
+        payment_method: order.paymentMethod,
+        order_total: order.total.toFixed(2)
+    };
     
-    // Simulate successful order processing
-    setTimeout(() => {
-        if (document.getElementById('checkoutModal')) {
-            document.getElementById('checkoutModal').remove();
-        }
-        showOrderSuccessMessage(order.paymentMethod);
-    }, 2000);
+    // Send the email using EmailJS
+    // Replace YOUR_TEMPLATE_ID with your actual template ID
+    emailjs.send('service_fcsd7gr', 'template_pchevsq', templateParams)
+        .then(function(response) {
+            console.log('Email successfully sent!', response);
+            if (checkoutModal) {
+                checkoutModal.remove();
+            }
+            showOrderSuccessMessage(order.paymentMethod);
+        }, function(error) {
+            console.error('Email sending failed:', error);
+            // Still show success to customer, but log the error
+            if (checkoutModal) {
+                checkoutModal.remove();
+            }
+            showOrderSuccessMessage(order.paymentMethod);
+            // Show a notification about the email error
+            showToast('Your order was processed, but there was an issue sending the order confirmation. Our team has been notified.', 'warning');
+        });
 }
 
 // Show order success message
@@ -2835,4 +2852,87 @@ function createMockupCanvas(style, color) {
         console.error('Error creating mockup canvas:', error);
         return null;
     }
+}
+
+// Add a function to test EmailJS at the end of the file
+function testEmailJSSetup() {
+    // Test data with realistic values
+    const testOrder = {
+        id: 'TEST-' + Date.now().toString().slice(-6),
+        date: new Date().toISOString(),
+        customer: {
+            name: 'Test Customer',
+            email: 'aicardgen_business@outlook.com', // The business email will receive the test
+            address: '123 Test Street, Test City, 12345'
+        },
+        items: [
+            {
+                style: 'regular',
+                size: 'M',
+                color: 'black',
+                price: 29.99,
+                imageUrl: 'https://placehold.co/400x400/e0d8f0/4a2c82?text=Test+Design',
+                previewImageUrl: 'https://placehold.co/400x400/121212/e0d8f0?text=Mockup'
+            },
+            {
+                style: 'longsleeve',
+                size: 'L',
+                color: 'black',
+                price: 34.99,
+                imageUrl: 'https://placehold.co/400x400/e0d8f0/4a2c82?text=Design+2',
+                previewImageUrl: 'https://placehold.co/400x400/121212/e0d8f0?text=Mockup+2'
+            }
+        ],
+        total: 64.98,
+        paymentMethod: 'Credit Card'
+    };
+    
+    // Show toast to indicate test is running
+    showToast('Testing EmailJS setup with professional template...', 'info');
+    
+    // Send the test order email
+    sendOrderToEmail(testOrder);
+    
+    console.log('Test order sent via EmailJS. Check your email and browser console for results.');
+}
+
+// Uncomment the line below to run the test when the page loads
+// window.addEventListener('load', testEmailJSSetup);
+
+// Add a visible test button when not in production
+if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname === '') {
+    window.addEventListener('load', function() {
+        const testButton = document.createElement('button');
+        testButton.textContent = 'Test Email Template';
+        testButton.style.position = 'fixed';
+        testButton.style.bottom = '20px';
+        testButton.style.left = '20px';
+        testButton.style.zIndex = '9999';
+        testButton.style.padding = '12px 20px';
+        testButton.style.backgroundColor = '#4a2c82';
+        testButton.style.color = 'white';
+        testButton.style.border = 'none';
+        testButton.style.borderRadius = '5px';
+        testButton.style.cursor = 'pointer';
+        testButton.style.fontWeight = 'bold';
+        testButton.style.boxShadow = '0 4px 8px rgba(0,0,0,0.2)';
+        
+        // Add hover effect
+        testButton.onmouseover = function() {
+            this.style.backgroundColor = '#6b42b8';
+            this.style.transform = 'translateY(-2px)';
+            this.style.boxShadow = '0 6px 12px rgba(0,0,0,0.3)';
+            this.style.transition = 'all 0.3s ease';
+        };
+        
+        testButton.onmouseout = function() {
+            this.style.backgroundColor = '#4a2c82';
+            this.style.transform = 'translateY(0)';
+            this.style.boxShadow = '0 4px 8px rgba(0,0,0,0.2)';
+            this.style.transition = 'all 0.3s ease';
+        };
+        
+        testButton.addEventListener('click', testEmailJSSetup);
+        document.body.appendChild(testButton);
+    });
 }
