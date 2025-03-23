@@ -296,12 +296,51 @@
         }
         
         #imagePreview {
-            max-width: 100%;
-            margin-top: 1rem;
-            border-radius: 8px;
+            margin-top: 20px;
             display: none;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-            transition: box-shadow 0.3s ease;
+            padding: 10px;
+            background-color: var(--card-bg);
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            min-height: 100px;
+        }
+        
+        #imagePreview img {
+            max-width: 100%;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            display: block;
+            margin: 0 auto;
+        }
+        
+        #imagePreview .error-message {
+            padding: 20px;
+            background-color: rgba(255, 0, 0, 0.1);
+            color: #d32f2f;
+            border-radius: 8px;
+            text-align: center;
+        }
+        
+        #imagePreview button {
+            margin-top: 15px;
+            margin-right: 5px;
+        }
+        
+        /* Generated image will show here message */
+        #imagePreview::before {
+            content: '';
+            display: none;
+        }
+        
+        /* Only show the message when the div is empty */
+        #imagePreview:empty::before {
+            content: 'Generated image will appear here';
+            display: block;
+            padding: 40px 20px;
+            color: var(--text-light);
+            font-style: italic;
+            text-align: center;
         }
         
         .api-section {
@@ -594,14 +633,35 @@
             
             .btn-group {
                 flex-direction: column;
+                align-items: stretch;
+                gap: 0.5rem;
             }
             
             .btn-group .btn {
                 width: 100%;
+                justify-content: center;
+                padding: 0.8rem;
             }
             
             .api-key-container {
                 flex-direction: column;
+                gap: 0.5rem;
+            }
+            
+            .api-key-input {
+                width: 100%;
+            }
+            
+            .api-service-toggle {
+                flex-wrap: wrap;
+                gap: 0.5rem;
+            }
+            
+            .api-service-btn {
+                flex: 1;
+                min-width: 120px;
+                font-size: 0.9rem;
+                padding: 0.7rem 0.5rem;
             }
             
             .donation-buttons {
@@ -610,17 +670,68 @@
             }
             
             .theme-toggle {
-                top: -0.5rem;
-                right: -0.5rem;
+                top: 0.5rem;
+                right: 0.5rem;
             }
+            
+            .tagline {
+                margin-bottom: 2rem;
+            }
+            
+            .card {
+                padding: 1.25rem;
+            }
+            
+            .section-title {
+                padding: 0.8rem 1rem;
+            }
+            
+            /* Better touch targets for mobile */
+            select, button, .toggle-slider {
+                min-height: 44px;
+            }
+        }
+        
+        .api-action-links {
+            margin: 0.75rem 0;
+            display: flex;
+            justify-content: flex-start;
+        }
+        
+        .api-link-btn {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.5rem 1rem;
+            background-color: var(--secondary);
+            color: var(--primary);
+            border-radius: 6px;
+            text-decoration: none;
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            border: 1px solid var(--border);
+        }
+        
+        .api-link-btn i {
+            margin-right: 0.5rem;
+        }
+        
+        .api-link-btn:hover {
+            background-color: var(--primary-dark);
+            color: white;
+            transform: translateY(-1px);
+        }
+        
+        [data-theme="dark"] .api-link-btn {
+            color: var(--text);
         }
     </style>
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>Fantasy Prompt Generator</h1>
-            <p class="tagline">Create detailed fantasy prompts for images and text</p>
+            <h1>AI Card Generator</h1>
+            <p class="tagline">Create detailed fantasy prompts for images and text, generate your own merch and more!</p>
             <button id="themeToggle" class="theme-toggle" aria-label="Toggle dark mode">
                 <i class="fas fa-moon"></i>
             </button>
@@ -652,6 +763,9 @@
                 <button id="generateDescriptionBtn" class="btn btn-secondary">
                     <i class="fas fa-pen-fancy btn-icon"></i> Generate Description
                 </button>
+                <a href="merch.html" id="merchBtn" class="btn btn-secondary">
+                    <i class="fas fa-tshirt btn-icon"></i> Merch Shop
+                </a>
             </div>
         </div>
         
@@ -689,6 +803,11 @@
                         <input type="text" id="aiHordeApiKeyInput" class="api-key-input" placeholder="Enter your AI Horde API key" />
                         <button id="applyAiHordeApiKeyBtn" class="api-key-btn">Apply API Key</button>
                     </div>
+                    <div class="api-action-links">
+                        <a href="https://stablehorde.net/register" target="_blank" class="api-link-btn">
+                            <i class="fas fa-key"></i> Get AI Horde API Key
+                        </a>
+                    </div>
                     <div class="model-select">
                         <select id="aiHordeModelSelect" disabled>
                             <option value="">Loading models...</option>
@@ -697,13 +816,13 @@
                 </div>
                 
                 <!-- NSFW Toggle -->
-                <div class="nsfw-toggle-container">
+                <!-- <div class="nsfw-toggle-container">
                     <label for="nsfwToggle">Enable NSFW Content:</label>
                     <label class="toggle-switch">
                         <input type="checkbox" id="nsfwToggle">
                         <span class="toggle-slider"></span>
                     </label>
-                </div>
+                 </div> -->
             </div>
         </div>
         
@@ -749,7 +868,7 @@
                 <button class="copy-btn" onclick="copyToClipboard('imagePrompt')">
                     <i class="fas fa-copy"></i> Copy
                 </button>
-                <img id="imagePreview" alt="Generated image will appear here" />
+                <div id="imagePreview"></div>
             </div>
             
             <div class="prompt-container">
@@ -1725,10 +1844,50 @@ document.getElementById('exportJsonBtn').addEventListener('click', () => {
         alert('Please generate prompts first!');
     }
 });
+
+// Function to save generated image for merch use
+function saveGeneratedImageForMerch(imageUrl, entityName = '') {
+    // Get existing saved images or create a new array
+    let savedImages = JSON.parse(localStorage.getItem('generatedImages')) || [];
+    
+    // Check if this image is already saved
+    const isDuplicate = savedImages.some(image => image.url === imageUrl);
+    
+    if (!isDuplicate) {
+        // If entityName wasn't provided, try to get it from the DOM
+        if (!entityName) {
+            const entityNameElement = document.getElementById('entityName');
+            if (entityNameElement) {
+                entityName = entityNameElement.innerText;
+            }
+        }
+        
+        // Add the new image URL with the entity name
+        savedImages.push({
+            url: imageUrl,
+            date: new Date().toISOString(),
+            name: entityName || ''
+        });
+        
+        // Only keep the last 20 images to prevent localStorage from getting too large
+        if (savedImages.length > 20) {
+            savedImages = savedImages.slice(savedImages.length - 20);
+        }
+        
+        // Save back to localStorage
+        localStorage.setItem('generatedImages', JSON.stringify(savedImages));
+        console.log('Image saved for merchandise use');
+    }
+}
         
         // Generate initial prompts when page loads
         window.onload = function() {
-            generatePrompts();
+            // Check if we're returning from merch page and have a preserved state
+            const preserveState = sessionStorage.getItem('generatorStatePreserved') === 'true';
+            if (!preserveState) {
+                // Only generate new prompts if we're not preserving state
+                generatePrompts();
+            }
             
             // Set up toggle functionality for settings sections
             document.getElementById('imageSettingsToggle').addEventListener('click', function() {
@@ -1741,14 +1900,47 @@ document.getElementById('exportJsonBtn').addEventListener('click', () => {
             
             // Set up theme toggle
             const themeToggle = document.getElementById('themeToggle');
-            themeToggle.addEventListener('click', toggleTheme);
+            const htmlElement = document.documentElement;
+            const moonIcon = '<i class="fas fa-moon"></i>';
+            const sunIcon = '<i class="fas fa-sun"></i>';
             
-            // Check for saved theme preference
-            const savedTheme = localStorage.getItem('theme');
-            if (savedTheme) {
-                document.documentElement.setAttribute('data-theme', savedTheme);
-                updateThemeIcon(savedTheme);
-            }
+            // Check for saved theme preference or use default
+            const savedTheme = localStorage.getItem('theme') || 'light';
+            htmlElement.setAttribute('data-theme', savedTheme);
+            themeToggle.innerHTML = savedTheme === 'dark' ? sunIcon : moonIcon;
+            
+            // Toggle theme when button is clicked
+            themeToggle.addEventListener('click', function() {
+                const currentTheme = htmlElement.getAttribute('data-theme');
+                const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+                
+                htmlElement.setAttribute('data-theme', newTheme);
+                localStorage.setItem('theme', newTheme);
+                themeToggle.innerHTML = newTheme === 'dark' ? sunIcon : moonIcon;
+            });
+            
+            // Add event listener for the Merch button to save state
+            document.getElementById('merchBtn').addEventListener('click', function(e) {
+                // Save current state before navigating to merch
+                const imagePreview = document.getElementById('imagePreview');
+                if (imagePreview && imagePreview.querySelector('img')) {
+                    // Mark that we want to preserve the state when we return
+                    sessionStorage.setItem('generatorStatePreserved', 'true');
+                    
+                    // Save the current image URL
+                    const currentImg = imagePreview.querySelector('img');
+                    sessionStorage.setItem('currentGeneratedImage', currentImg.src);
+                    
+                    // Also save to localStorage for use in the merch page
+                    if (typeof saveGeneratedImageForMerch === 'function') {
+                        saveGeneratedImageForMerch(currentImg.src);
+                    }
+                    
+                    console.log('Image state saved before navigation to merch page');
+                } else {
+                    console.log('No image to save before navigation');
+                }
+            });
         };
         
         // Function to toggle section visibility
@@ -1765,27 +1957,6 @@ document.getElementById('exportJsonBtn').addEventListener('click', () => {
                 iconElement.classList.remove('collapsed');
             }
         }
-        
-        // Function to toggle theme
-        function toggleTheme() {
-            const currentTheme = document.documentElement.getAttribute('data-theme');
-            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-            
-            document.documentElement.setAttribute('data-theme', newTheme);
-            localStorage.setItem('theme', newTheme);
-            
-            updateThemeIcon(newTheme);
-        }
-        
-        // Function to update theme icon
-        function updateThemeIcon(theme) {
-            const themeIcon = document.querySelector('#themeToggle i');
-            if (theme === 'dark') {
-                themeIcon.className = 'fas fa-sun';
-            } else {
-                themeIcon.className = 'fas fa-moon';
-            }
-        }
     </script>
     
     <!-- Separate script for image generation -->
@@ -1793,5 +1964,36 @@ document.getElementById('exportJsonBtn').addEventListener('click', () => {
     
     <!-- Separate script for description generation -->
     <script src="descriptionGenerator.js"></script>
+    
+    <!-- Script for merchandise functionality -->
+    <script src="merch.js"></script>
+    
+    <!-- Additional script to ensure theme toggle works -->
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Set up theme toggle (this ensures it works regardless of window.onload timing)
+        const themeToggle = document.getElementById('themeToggle');
+        if (themeToggle) {
+            const htmlElement = document.documentElement;
+            const moonIcon = '<i class="fas fa-moon"></i>';
+            const sunIcon = '<i class="fas fa-sun"></i>';
+            
+            // Check for saved theme preference or use default
+            const savedTheme = localStorage.getItem('theme') || 'light';
+            htmlElement.setAttribute('data-theme', savedTheme);
+            themeToggle.innerHTML = savedTheme === 'dark' ? sunIcon : moonIcon;
+            
+            // Toggle theme when button is clicked
+            themeToggle.addEventListener('click', function() {
+                const currentTheme = htmlElement.getAttribute('data-theme');
+                const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+                
+                htmlElement.setAttribute('data-theme', newTheme);
+                localStorage.setItem('theme', newTheme);
+                themeToggle.innerHTML = newTheme === 'dark' ? sunIcon : moonIcon;
+            });
+        }
+    });
+    </script>
 </body>
 </html>
