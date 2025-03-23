@@ -2116,12 +2116,17 @@ function sendOrderToEmail(order) {
     }
     
     // Prepare parameters for EmailJS
-    // The template_params object should match your EmailJS template variables
+    // EmailJS requires specific parameter names for the recipient address 
     const templateParams = {
+        // Standard EmailJS email parameters
+        to_name: 'Merchandise Team',
         to_email: 'aicardgen_business@outlook.com',
         from_name: order.customer.name,
         from_email: order.customer.email,
+        reply_to: order.customer.email,
         subject: `New Order #${order.id}`,
+        
+        // Template content variables
         message: orderHTML,
         order_id: order.id,
         order_date: new Date(order.date).toLocaleString(),
@@ -2132,8 +2137,9 @@ function sendOrderToEmail(order) {
         order_total: order.total.toFixed(2)
     };
     
-    // Send the email using EmailJS
-    // Replace YOUR_TEMPLATE_ID with your actual template ID
+    console.log('Sending email with parameters:', templateParams);
+    
+    // Send the email using EmailJS with the template_pchevsq template
     emailjs.send('service_fcsd7gr', 'template_pchevsq', templateParams)
         .then(function(response) {
             console.log('Email successfully sent!', response);
@@ -2890,10 +2896,38 @@ function testEmailJSSetup() {
     // Show toast to indicate test is running
     showToast('Testing EmailJS setup with professional template...', 'info');
     
-    // Send the test order email
-    sendOrderToEmail(testOrder);
+    // Direct EmailJS test with explicit parameters
+    const templateParams = {
+        // Standard EmailJS email parameters
+        to_name: 'Merchandise Team',
+        to_email: 'aicardgen_business@outlook.com', 
+        from_name: 'Test Customer',
+        from_email: 'test@example.com',
+        reply_to: 'test@example.com',
+        subject: `Test Order #TEST-${Date.now().toString().slice(-6)}`,
+        
+        // Order specific content
+        message: 'This is a test email to verify the EmailJS integration is working correctly.',
+        order_id: `TEST-${Date.now().toString().slice(-6)}`,
+        order_date: new Date().toLocaleString(),
+        customer_name: 'Test Customer',
+        customer_email: 'test@example.com',
+        customer_address: '123 Test Street, Test City, 12345',
+        payment_method: 'Test Payment',
+        order_total: '64.98'
+    };
     
-    console.log('Test order sent via EmailJS. Check your email and browser console for results.');
+    console.log('Sending test email with parameters:', templateParams);
+    
+    // Send the test email directly
+    emailjs.send('service_fcsd7gr', 'template_pchevsq', templateParams)
+        .then(function(response) {
+            console.log('Test email successfully sent!', response);
+            showToast('Test email sent successfully!', 'success');
+        }, function(error) {
+            console.error('Test email sending failed:', error);
+            showToast('Test email failed to send. Check console for details.', 'error');
+        });
 }
 
 // Uncomment the line below to run the test when the page loads
