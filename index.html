@@ -1,0 +1,1797 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fantasy Prompt Generator</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #4a2c82;
+            --primary-light: #6b42b8;
+            --primary-dark: #3a1c72;
+            --secondary: #f9f7ff;
+            --accent: #7e5ac7;
+            --text: #333;
+            --text-light: #666;
+            --background: #f8f9fa;
+            --card-bg: #ffffff;
+            --border: #e0d8f0;
+            --success: #28a745;
+        }
+        
+        [data-theme="dark"] {
+            --primary: #6b42b8;
+            --primary-light: #7e5ac7;
+            --primary-dark: #4a2c82;
+            --secondary: #2d2040;
+            --accent: #9370db;
+            --text: #e0e0e0;
+            --text-light: #b0b0b0;
+            --background: #121212;
+            --card-bg: #1e1e1e;
+            --border: #3a2c50;
+            --success: #2ebd4e;
+        }
+        
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--background);
+            color: var(--text);
+            line-height: 1.6;
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+        
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        header {
+            text-align: center;
+            margin-bottom: 2rem;
+            position: relative;
+        }
+        
+        h1 {
+            color: var(--primary);
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+            transition: color 0.3s ease;
+        }
+        
+        .tagline {
+            color: var(--text-light);
+            font-size: 1.1rem;
+            margin-bottom: 1rem;
+            transition: color 0.3s ease;
+        }
+        
+        .card {
+            background-color: var(--card-bg);
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            transition: background-color 0.3s ease, box-shadow 0.3s ease;
+        }
+        
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border);
+            transition: border-color 0.3s ease;
+        }
+        
+        .card-title {
+            font-size: 1.2rem;
+            color: var(--primary);
+            font-weight: 600;
+            transition: color 0.3s ease;
+        }
+        
+        .card-type-select {
+            margin-bottom: 1.5rem;
+        }
+        
+        select {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            font-size: 1rem;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background-color: var(--card-bg);
+            color: var(--text);
+            transition: all 0.2s;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%234a2c82' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 1rem center;
+            background-size: 1rem;
+        }
+        
+        [data-theme="dark"] select {
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b42b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+        }
+        
+        select:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(74, 44, 130, 0.1);
+        }
+        
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.75rem 1.5rem;
+            font-size: 1rem;
+            font-weight: 500;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none;
+        }
+        
+        .btn-primary {
+            background-color: var(--primary);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background-color: var(--primary-light);
+        }
+        
+        .btn-secondary {
+            background-color: var(--secondary);
+            color: var(--primary);
+            border: 1px solid var(--border);
+        }
+        
+        [data-theme="dark"] .btn-secondary {
+            color: var(--text);
+        }
+        
+        .btn-secondary:hover {
+            background-color: var(--primary-dark);
+            color: white;
+        }
+        
+        .btn-icon {
+            margin-right: 0.5rem;
+        }
+        
+        .btn-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            margin: 1.5rem 0;
+        }
+        
+        .sticky-button-container {
+            position: sticky;
+            bottom: 1.5rem;
+            z-index: 100;
+            padding: 0 1rem;
+            margin: 0 -1rem;
+            transition: all 0.3s ease;
+        }
+        
+        .generate-btn {
+            width: 100%;
+            padding: 1rem;
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin: 1.5rem 0;
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+        
+        .generate-btn:hover {
+            background-color: var(--primary-light);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+        }
+        
+        .generate-btn i {
+            margin-right: 0.5rem;
+        }
+        
+        .entity-name {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--primary);
+            margin: 1rem 0;
+            text-align: center;
+            transition: color 0.3s ease;
+        }
+        
+        .prompt-container {
+            background-color: var(--secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.25rem;
+            margin-bottom: 1.5rem;
+            position: relative;
+            transition: background-color 0.3s ease, border-color 0.3s ease;
+        }
+        
+        .prompt-container h3 {
+            margin-top: 0;
+            color: var(--primary);
+            font-size: 1.1rem;
+            margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+            transition: color 0.3s ease;
+        }
+        
+        .prompt-container h3 i {
+            margin-right: 0.5rem;
+        }
+        
+        .attributes {
+            margin-bottom: 1rem;
+            padding: 0.5rem 0.75rem;
+            background-color: rgba(224, 216, 240, 0.3);
+            border-radius: 4px;
+            font-size: 0.9rem;
+            color: var(--text-light);
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+        
+        [data-theme="dark"] .attributes {
+            background-color: rgba(74, 44, 130, 0.2);
+        }
+        
+        .prompt-text {
+            white-space: pre-wrap;
+            line-height: 1.6;
+            margin-bottom: 0.5rem;
+            font-size: 1rem;
+            transition: color 0.3s ease;
+        }
+        
+        .copy-btn {
+            position: absolute;
+            top: 1.25rem;
+            right: 1.25rem;
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            padding: 0.4rem 0.75rem;
+            font-size: 0.85rem;
+            border-radius: 4px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            transition: background-color 0.3s ease;
+        }
+        
+        .copy-btn:hover {
+            background-color: var(--primary-light);
+        }
+        
+        .copy-btn i {
+            margin-right: 0.3rem;
+        }
+        
+        #imagePreview {
+            max-width: 100%;
+            margin-top: 1rem;
+            border-radius: 8px;
+            display: none;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            transition: box-shadow 0.3s ease;
+        }
+        
+        .api-section {
+            margin-top: 1.5rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid var(--border);
+            transition: border-color 0.3s ease;
+        }
+        
+        .section-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+            transition: color 0.3s ease;
+        }
+        
+        .section-title .title-text {
+            display: flex;
+            align-items: center;
+        }
+        
+        .section-title i {
+            margin-right: 0.5rem;
+        }
+        
+        .section-content {
+            transition: all 0.3s ease;
+            overflow: hidden;
+        }
+        
+        .section-content.collapsed {
+            max-height: 0;
+            opacity: 0;
+            margin-top: 0;
+            padding-top: 0;
+        }
+        
+        .section-content.expanded {
+            max-height: 1000px;
+            opacity: 1;
+        }
+        
+        .toggle-icon {
+            transition: transform 0.3s ease;
+        }
+        
+        .toggle-icon.collapsed {
+            transform: rotate(-90deg);
+        }
+        
+        .api-service-toggle {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+        
+        .api-service-btn {
+            flex: 1;
+            padding: 0.75rem;
+            font-size: 0.95rem;
+            background-color: var(--secondary);
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .api-service-btn i {
+            margin-right: 0.5rem;
+        }
+        
+        .api-service-btn.active {
+            background-color: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+        
+        .api-key-container {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+        
+        .api-key-input {
+            flex: 1;
+            padding: 0.75rem 1rem;
+            font-size: 0.95rem;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background-color: var(--card-bg);
+            color: var(--text);
+            transition: all 0.3s ease;
+        }
+        
+        .api-key-input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(74, 44, 130, 0.1);
+        }
+        
+        .api-key-btn {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            padding: 0.75rem 1rem;
+            font-size: 0.95rem;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+        
+        .api-key-btn:hover {
+            background-color: var(--primary-light);
+        }
+        
+        .current-api-info {
+            text-align: center;
+            margin: 0.75rem 0;
+            padding: 0.5rem;
+            background-color: var(--secondary);
+            border-radius: 6px;
+            font-weight: 500;
+            color: var(--primary);
+            font-size: 0.95rem;
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+        
+        [data-theme="dark"] .current-api-info {
+            color: var(--text);
+        }
+        
+        .api-settings {
+            display: none;
+            margin-top: 1rem;
+        }
+        
+        .api-settings.active {
+            display: block;
+        }
+        
+        .model-select {
+            margin-bottom: 1rem;
+        }
+        
+        footer {
+            margin-top: 3rem;
+            text-align: center;
+            padding: 1.5rem;
+            border-top: 1px solid var(--border);
+            color: var(--text-light);
+            transition: border-color 0.3s ease, color 0.3s ease;
+        }
+        
+        .footer-content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem;
+        }
+        
+        .donation-buttons {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+        
+        .donation-btn {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.6rem 1rem;
+            font-size: 0.9rem;
+            border-radius: 6px;
+            text-decoration: none;
+            transition: all 0.2s;
+        }
+        
+        .paypal-btn {
+            background-color: #0070ba;
+            color: white;
+        }
+        
+        .paypal-btn:hover {
+            background-color: #005ea6;
+        }
+        
+        .coffee-btn {
+            background-color: #FFDD00;
+            color: #000000;
+        }
+        
+        .coffee-btn:hover {
+            background-color: #E5C700;
+        }
+        
+        .donation-btn i {
+            margin-right: 0.5rem;
+        }
+        
+        .theme-toggle {
+            position: absolute;
+            top: 0;
+            right: 0;
+            background: transparent;
+            border: none;
+            color: var(--primary);
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 0.5rem;
+            transition: color 0.3s ease, transform 0.3s ease;
+        }
+        
+        .theme-toggle:hover {
+            color: var(--primary-light);
+            transform: rotate(15deg);
+        }
+        
+        /* NSFW Toggle Styles */
+        .nsfw-toggle-container {
+            display: flex;
+            align-items: center;
+            margin-top: 10px;
+            margin-bottom: 10px;
+        }
+        
+        .nsfw-toggle-container label {
+            margin-right: 10px;
+            font-size: 0.9rem;
+            color: var(--text);
+        }
+        
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 24px;
+        }
+        
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 24px;
+        }
+        
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 16px;
+            width: 16px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        
+        input:checked + .toggle-slider {
+            background-color: var(--primary);
+        }
+        
+        input:checked + .toggle-slider:before {
+            transform: translateX(26px);
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+            
+            .btn-group {
+                flex-direction: column;
+            }
+            
+            .btn-group .btn {
+                width: 100%;
+            }
+            
+            .api-key-container {
+                flex-direction: column;
+            }
+            
+            .donation-buttons {
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+            
+            .theme-toggle {
+                top: -0.5rem;
+                right: -0.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Fantasy Prompt Generator</h1>
+            <p class="tagline">Create detailed fantasy prompts for images and text</p>
+            <button id="themeToggle" class="theme-toggle" aria-label="Toggle dark mode">
+                <i class="fas fa-moon"></i>
+            </button>
+        </header>
+        
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">Card Type</div>
+            </div>
+            
+            <div class="card-type-select">
+                <select id="cardTypeSelect">
+                    <option value="random">Random Card Type</option>
+                    <option value="Land">Land</option>
+                    <option value="Creature">Creature</option>
+                    <option value="Entity">Entity</option>
+                    <option value="Spell">Spell</option>
+                    <option value="Trap">Trap</option>
+                </select>
+            </div>
+            
+            <div class="btn-group">
+                <button id="exportJsonBtn" class="btn btn-secondary">
+                    <i class="fas fa-file-export btn-icon"></i> Export as JSON
+                </button>
+                <button id="generateImageBtn" class="btn btn-secondary">
+                    <i class="fas fa-image btn-icon"></i> Generate Image
+                </button>
+                <button id="generateDescriptionBtn" class="btn btn-secondary">
+                    <i class="fas fa-pen-fancy btn-icon"></i> Generate Description
+                </button>
+            </div>
+        </div>
+        
+        <div class="api-section card">
+            <div class="section-title" id="imageSettingsToggle">
+                <div class="title-text">
+                    <i class="fas fa-image"></i> Image Generation Settings
+                </div>
+                <i class="fas fa-chevron-down toggle-icon"></i>
+            </div>
+            
+            <div class="section-content expanded" id="imageSettingsContent">
+                <div class="api-service-toggle">
+                    <button id="togetherApiBtn" class="api-service-btn active">
+                        <i class="fas fa-server"></i> Together.ai
+                    </button>
+                    <button id="aiHordeApiBtn" class="api-service-btn">
+                        <i class="fas fa-network-wired"></i> AI Horde
+                    </button>
+                </div>
+                
+                <div class="current-api-info" id="currentApiInfo">
+                    Currently using: Together.ai
+                </div>
+                
+                <div id="togetherApiSettings" class="api-settings active">
+                    <div class="api-key-container">
+                        <input type="text" id="togetherApiKeyInput" class="api-key-input" placeholder="Enter your Together.ai API key" />
+                        <button id="applyTogetherApiKeyBtn" class="api-key-btn">Apply API Key</button>
+                    </div>
+                </div>
+                
+                <div id="aiHordeApiSettings" class="api-settings">
+                    <div class="api-key-container">
+                        <input type="text" id="aiHordeApiKeyInput" class="api-key-input" placeholder="Enter your AI Horde API key" />
+                        <button id="applyAiHordeApiKeyBtn" class="api-key-btn">Apply API Key</button>
+                    </div>
+                    <div class="model-select">
+                        <select id="aiHordeModelSelect" disabled>
+                            <option value="">Loading models...</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <!-- NSFW Toggle -->
+                <div class="nsfw-toggle-container">
+                    <label for="nsfwToggle">Enable NSFW Content:</label>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="nsfwToggle">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+            </div>
+        </div>
+        
+        <div class="api-section card">
+            <div class="section-title" id="textSettingsToggle">
+                <div class="title-text">
+                    <i class="fas fa-pen-nib"></i> Text Generation Settings
+                </div>
+                <i class="fas fa-chevron-down toggle-icon"></i>
+            </div>
+            
+            <div class="section-content expanded" id="textSettingsContent">
+                <div class="api-key-container">
+                    <input type="text" id="aiHordeTextApiKeyInput" class="api-key-input" placeholder="Enter your AI Horde API key for text" />
+                    <button id="applyAiHordeTextApiKeyBtn" class="api-key-btn">Apply API Key</button>
+                </div>
+                
+                <div class="model-select">
+                    <select id="aiHordeTextModelSelect" disabled>
+                        <option value="">Loading text models...</option>
+                    </select>
+                </div>
+                
+                <div class="current-api-info" id="currentTextApiInfo">
+                    Text model: Not selected
+                </div>
+            </div>
+        </div>
+        
+        <div class="sticky-button-container">
+            <button id="generateBtn" class="generate-btn">
+                <i class="fas fa-magic"></i> Generate New Prompts
+            </button>
+        </div>
+        
+        <div class="output">
+            <div class="entity-name" id="entityName"></div>
+            
+            <div class="prompt-container">
+                <h3><i class="fas fa-image"></i> Image Prompt</h3>
+                <div id="attributesImage" class="attributes"></div>
+                <div id="imagePrompt" class="prompt-text"></div>
+                <button class="copy-btn" onclick="copyToClipboard('imagePrompt')">
+                    <i class="fas fa-copy"></i> Copy
+                </button>
+                <img id="imagePreview" alt="Generated image will appear here" />
+            </div>
+            
+            <div class="prompt-container">
+                <h3><i class="fas fa-pen-fancy"></i> Text Prompt</h3>
+                <div id="attributesText" class="attributes"></div>
+                <div id="textPrompt" class="prompt-text"></div>
+                <button class="copy-btn" onclick="copyToClipboard('textPrompt')">
+                    <i class="fas fa-copy"></i> Copy
+                </button>
+                <div id="generatedDescription" class="prompt-text"></div>
+            </div>
+        </div>
+        
+        <footer>
+            <div class="footer-content">
+                <p>© NextCardGen Studios 2025. All rights reserved.</p>
+                <div class="donation-buttons">
+                    <a href="https://www.paypal.com/donate" target="_blank" class="donation-btn paypal-btn">
+                        <i class="fab fa-paypal"></i> Donate with PayPal
+                    </a>
+                    <a href="https://www.buymeacoffee.com" target="_blank" class="donation-btn coffee-btn">
+                        <i class="fas fa-mug-hot"></i> Buy Me a Coffee
+                    </a>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        // Data arrays for random selections
+        const cardTypes = ["Land", "Creature", "Entity", "Spell", "Trap"];
+        
+const races = [
+    "Human", "Elf", "Dwarf", "Orc", "Goblin", "Troll", "Dragonkin", 
+    "Undead", "Celestial", "Demon", "Fae", "Merfolk", "Centaur", 
+    "Minotaur", "Halfling", "Elemental", "Construct", 
+    "Shapeshifter", "Vampire", "Werewolf", "Giant", "Naga", "Sylph",
+    "Djinn", "Angel", "Devil", "Satyr", "Harpy", "Chimera", "Phoenix",
+    "Lich", "Golem", "Dryad", "Banshee", "Gargoyle", "Kitsune", "Titan",
+    "Aasimar", "Tiefling", "Tabaxi", "Triton", "Kenku", "Firbolg", "Genasi", 
+    "Warforged", "Changeling", "Hobgoblin", "Yeti", "Harpie", "Bugbear", 
+    "Lizardfolk", "Kobold", "Slaad", "Githyanki", "Githzerai", "Shadar-Kai",
+    "Yuan-Ti", "Vesk", "Trollborn", "Svirfneblin", "Changelings", "Loxodon",
+    "Simic Hybrid", "Vedalken", "Leonin", "Hylian", "Shifter", "Feytouched",
+    "Kitsune", "Gith", "Gnome", "Ogre", "Valkyrie", "Sylph", "Githzerai",
+    "Moon Elf", "Wild Elf", "Drow", "Forest Gnome", "Deep Gnome", "Rock Gnome", 
+    "Sea Elf", "Wood Elf", "Half-Orc", "Half-Elf", "Half-Demon", "Half-Giant",
+    "Nymph", "Treant", "Changelings", "Half-Dragon", "Zora", "Rakshasa", "Merman"
+];
+        
+const terrains = [
+    "Plains", "Forest", "Mountain", "Swamp", "Island", "Desert", 
+    "Tundra", "Jungle", "Cavern", "Volcano", "Ruins", "Castle", 
+    "Village", "City", "Ocean", "Lake", "River", "Cliff", 
+    "Wasteland", "Sanctuary", "Void", "Abyss", "Sky", "Ethereal Plane",
+    "Celestial Realm", "Underworld", "Floating Island", "Crystal Cave",
+    "Ancient Temple", "Misty Highlands", "Enchanted Grove", "Shadow Realm",
+    "Forgotten Citadel", "Burning Sands", "Frozen Tundra", "Shattered Isles",
+    "Grasslands", "Savanna", "Canyon", "Creeping Fog", "Ruined City", "Underground Caverns", 
+    "Coral Reef", "Lava Fields", "Mudflats", "Tidal Pools", "Fungal Forest", "Glistening Marsh",
+    "Crystal Desert", "Sunken Ruins", "Ghost Town", "Twilight Peaks", "Obsidian Plains", 
+    "Floating City", "Starry Expanse", "Flooded Forest", "Frostbitten Wastes", "Toxic Swamp",
+    "Mystic Vale", "Iron Hills", "Starfall Plateau", "Stormy Coast", "Thornwood", "Arctic Ice Shelf",
+    "Frostbound Archipelago", "Graveyard", "Feywild Forest", "Desolate Highlands", "Twisted Jungle", 
+    "Sunset Savannah", "Creeping Mire", "Troll Hills", "Ironclad Mountains", "Oblivion Plains"
+];
+        
+const personalities = [
+    "Noble", "Cunning", "Brave", "Cowardly", "Cruel", "Compassionate", 
+    "Wise", "Foolish", "Stoic", "Emotional", "Deceitful", "Honest", 
+    "Loyal", "Treacherous", "Curious", "Cautious", "Stubborn", "Adaptable", 
+    "Greedy", "Generous", "Reserved", "Outgoing", "Chaotic", "Orderly",
+    "Mysterious", "Predictable", "Mischievous", "Serious", "Melancholic", "Jovial",
+    "Pragmatic", "Idealistic", "Vengeful", "Forgiving", "Arrogant", "Humble",
+    "Calculating", "Impulsive", "Patient", "Impatient", "Brooding", "Cheerful",
+    "Charismatic", "Shy", "Ambitious", "Lethargic", "Optimistic", "Pessimistic", 
+    "Altruistic", "Selfish", "Eccentric", "Reliable", "Unreliable", "Protective",
+    "Submissive", "Rebellious", "Playful", "Serene", "Ruthless", "Sentimental",
+    "Perceptive", "Naive", "Tolerant", "Intolerant", "Quick-witted", "Diligent",
+    "Indifferent", "Grateful", "Petty", "Mature", "Immature", "Adventurous", 
+    "Calm", "Nurturing", "Extraverted", "Introverted", "Vain", "Modest", 
+    "Insecure", "Confident", "Idealistic", "Realistic", "Melodramatic", "Practical",
+    "Skeptical", "Hopeful", "Dramatic", "Passive", "Introspective", "Manipulative"
+];
+
+        
+const natures = [
+    "Destructive", "Creative", "Healing", "Harmful", "Protective", "Aggressive", 
+    "Passive", "Empowering", "Debilitating", "Transformative", "Restorative", "Corrupting", 
+    "Purifying", "Binding", "Liberating", "Illusive", "Revealing", "Summoning", "Banishing",
+    "Enchanting", "Cursed", "Blessed", "Ancient", "Newly Formed", "Primordial", "Evolved",
+    "Wild", "Tame", "Vengeful", "Forgiving", "Parasitic", "Symbiotic", "Volatile", "Stable",
+    "Corrupted", "Luminous", "Shadowy", "Ethereal", "Material", "Temporal", "Eternal",
+    "Fertile", "Rotting", "Balanced", "Toxic", "Feral", "Rejuvenating", "Searing", "Thorned", 
+    "Lush", "Overgrowth", "Flourishing", "Sapping", "Verdant", "Languishing", "Barren",
+    "Elemental", "Primal", "Beastly", "Ablative", "Benevolent", "Vengeful", "Illuminated",
+    "Feral", "Verdant", "Searing", "Frostbitten", "Torrential", "Blossoming", "Silent",
+    "Transmutative", "Storm-wrought", "Witchwood", "Draconic", "Feywild", "Glooming", 
+    "Ancient Oak", "Druidic", "Bloodthirsty", "Reckless", "Fleeting", "Calming", "Disturbed"
+];
+
+const magicTypes = [
+    "Fire", "Water", "Earth", "Air", "Light", "Shadow", "Arcane", 
+    "Divine", "Necromantic", "Blood", "Mind", "Time", "Space", 
+    "Lightning", "Frost", "Nature", "Chaos", "Order", "Spirit", "Void",
+    "Transmutation", "Enchantment", "Illusion", "Conjuration", "Evocation",
+    "Abjuration", "Divination", "Soul", "Gravity", "Cosmic", "Chromatic",
+    "Prismatic", "Eldritch", "Astral", "Dream", "Nightmare", "Psychic", "Storm",
+    "Hex", "Binding", "Summoning", "Thaumaturgy", "Alchemy", "Rune", "Illumination", 
+    "Shamanic", "Fey", "Vampiric", "Serpent", "Celestial", "Infernal", "Witchcraft",
+    "Chaos", "Entropy", "Siphoning", "Mystic", "Force", "Lunar", "Solar", "Mana", 
+    "Fungal", "Golemancy", "Symbiotic", "Planar", "Spiritbinding", "Tempest", "Tidal",
+    "Aether", "Lifebond", "Astral Projection", "Temporal", "Geomancy", "Spectral", "Curses"
+];
+        
+const powerLevels = [
+    "Weak", "Average", "Powerful", "Legendary", "Godlike", "Diminishing", 
+    "Growing", "Fluctuating", "Dormant", "Awakening", "Overwhelming", "Restrained",
+    "Unmatched", "Nascent", "Ascending", "Transcendent", "Primordial", "Limitless",
+    "Mighty", "Fledgling", "Epic", "Divine", "Colossal", "Vast", 
+    "Unstoppable", "Formidable", "Unyielding", "Indomitable", "Monstrous", "Immeasurable",
+    "Boundless", "Radiant", "Eternal", "Supreme", "Invincible", "Unfathomable", 
+    "Invulnerable", "Titanic", "Absolute", "Omnipotent", "Infinite", "Unconquerable"
+];
+
+        
+const timeOfDay = [
+    "Dawn", "Morning", "Noon", "Afternoon", "Dusk", "Twilight", 
+    "Night", "Midnight", "Witching Hour", "Eternal Day", "Endless Night",
+    "Golden Hour", "Blue Hour", "First Light", "Last Light",
+    "Early Morning", "Late Morning", "Late Afternoon", "Early Evening", "Nightfall",
+    "Sunrise", "Sunset", "High Noon", "Pre-Dawn", "After Midnight", "Crack of Dawn",
+    "Late Night", "Mid-Morning", "Mid-Afternoon", "Early Night", "Starlit Night",
+    "Moonrise", "Moonset", "Morning Mist", "Late Dusk", "Bright Noon", "Fading Light",
+    "Pre-Sunrise", "Post-Sunset", "Nocturnal", "Morning Glow", "Evening Glow", "Daybreak"
+];
+
+const weather = [
+    "Clear", "Cloudy", "Stormy", "Rainy", "Snowy", "Foggy", 
+    "Windy", "Thunderous", "Hailing", "Scorching", "Freezing",
+    "Misty", "Hurricane", "Tornado", "Blizzard", "Sandstorm", "Ethereal",
+    "Drizzly", "Overcast", "Gale-force", "Heatwave", "Frosty", "Icy", 
+    "Thunderstorm", "Showers", "Chilly", "Sultry", "Damp", "Torrential", 
+    "Hazy", "Dewy", "Partly Cloudy", "Unsettled", "Tropical", "Volcanic Ash", 
+    "Lightning", "Dusty", "Sleet", "Sweltering", "Breezy", "Cold Front", 
+    "Muggy", "Autumnal", "Spring-like", "Unusually Warm", "Heavy Snowfall"
+];
+        
+        const seasons = ["Spring", "Summer", "Autumn", "Winter", "Dry Season", "Wet Season", "Eternal Spring", "Endless Winter"];
+        
+const moods = [
+    "Tranquil", "Ominous", "Joyful", "Somber", "Tense", "Peaceful", 
+    "Eerie", "Magical", "Mystical", "Threatening", "Hopeful", "Desperate",
+    "Melancholic", "Serene", "Chaotic", "Harmonious", "Foreboding", "Majestic",
+    "Whimsical", "Ethereal", "Dreamlike", "Nightmarish", "Nostalgic", "Surreal",
+    "Gloomy", "Exciting", "Inspiring", "Romantic", "Mournful", "Turbulent",
+    "Mysterious", "Dark", "Radiant", "Blissful", "Lonely", "Tragic", 
+    "Frightening", "Content", "Adventurous", "Grim", "Curious", "Detached",
+    "Playful", "Hopeful", "Euphoric", "Pensive", "Regretful", "Awe-inspiring",
+    "Disorienting", "Reckless", "Nostalgic", "Refined", "Unsettling", "Pessimistic"
+];
+        
+const colors = [
+    "Red", "Blue", "Green", "White", "Black", "Purple", "Gold", 
+    "Silver", "Bronze", "Prismatic", "Colorless", "Iridescent", 
+    "Amber", "Crimson", "Azure", "Emerald", "Obsidian", "Ivory",
+    "Turquoise", "Violet", "Indigo", "Cerulean", "Jade", "Ruby", "Sapphire",
+    "Amethyst", "Onyx", "Pearl", "Copper", "Brass", "Platinum", "Opal",
+    "Magenta", "Cyan", "Lavender", "Maroon", "Teal", "Olive", "Coral",
+    "Salmon", "Beige", "Lilac", "Charcoal", "Mint", "Rose", "Peach",
+    "Mustard", "Tangerine", "Lime", "Navy", "Sky Blue", "Forest Green",
+    "Burgundy", "Pink", "Tan", "Slate Gray", "Periwinkle", "Mauve",
+    "Fuchsia", "Honeydew", "Khaki", "Orchid",
+    "Sepia"
+];
+        
+        const rarity = ["Common", "Uncommon", "Rare", "Epic", "Legendary", "Mythic", "Unique", "Divine", "Forbidden", "Forgotten"];
+        
+const artifactTypes = [
+    "Weapon", "Armor", "Amulet", "Ring", "Staff", "Wand", "Orb", 
+    "Scroll", "Potion", "Relic", "Totem", "Idol", "Crown", "Scepter",
+    "Tome", "Grimoire", "Talisman", "Chalice", "Medallion", "Figurine", "Artifact",
+    "Mask", "Lantern", "Banner", "Gemstone", "Runestone", "Key", "Seal",
+    "Gauntlet", "Boots", "Bracer", "Charm", "Pendant", "Rod", "Mirror",
+    "Horn", "Fang", "Claw", "Egg", "Shield", "Cloak", "Belt", "Helm",
+    "Goblet", "Scroll Case", "Runic Tablet", "Totemic Statue", "Enchanted Gem",
+    "Phylactery", "Crystal Ball", "Obelisk", "Codex", "Ankh", "Sigil",
+    "Vial", "Coffer", "Compass", "Hourglass", "Medusa's Eye", "Dragon Scale"
+];
+        
+const creatureRoles = [
+    "Guardian", "Hunter", "Scout", "Warrior", "Mage", "Healer", 
+    "Assassin", "Bard", "Druid", "Berserker", "Paladin", "Necromancer",
+    "Ranger", "Rogue", "Sorcerer", "Warlock", "Monk", "Shaman", "Cleric",
+    "Battlemage", "Spellblade", "Oracle", "Summoner", "Illusionist", "Enchanter",
+    "Crusader", "Witch", "Alchemist", "Elementalist", "Beastmaster", "Conjurer",
+    // New Roles Added Below
+    "Artificer", "Bladesinger", "Blood Hunter", "Chronomancer", "Cryomancer",
+    "Diviner", "Duelist", "Executioner", "Exorcist", "Farseer", "Gladiator",
+    "Geomancer", "Inquisitor", "Knight", "Loremaster", "Mystic", "Ninja",
+    "Outrider", "Pathfinder", "Priest", "Psion", "Pyromancer", "Runesmith",
+    "Sage", "Seer", "Shadowdancer", "Skald", "Sniper", "Soulbinder",
+    "Spellbreaker", "Stalker", "Stormcaller", "Swashbuckler", "Templar", "Thaumaturge",
+    "Trickster", "Vanguard", "Voidwalker", "Warden", "Warmage", "Wildspeaker",
+    "Witchblade", "Zealot", "Arcanist", "Bounty Hunter", "Corsair", "Demonologist",
+    "Hexblade", "Hydromancer", "Invoker", "Lich", "Myrmidon", "Planeswalker"
+];
+        
+const creatureSkills = [
+    "Shapeshifting", "Teleportation", "Elemental Control", "Flight", "Mind Reading", 
+    "Regeneration", "Invisibility", "Super Strength", "Underwater Breathing", "Night Vision",
+    "Poison Resistance", "Magic Resistance", "Spell Casting", "Summoning", "Beast Taming",
+    "Weapon Mastery", "Stealth", "Tracking", "Crafting", "Alchemy", "Herbalism",
+    "Telepathy", "Illusion Creation", "Spirit Walking", "Soul Manipulation", "Blood Magic",
+    "Necromancy", "Life Draining", "Force Field Creation", "Time Manipulation", "Gravity Control",
+    "Shadow Walking", "Light Bending", "Weather Control", "Portal Creation", "Dream Walking",
+    "Healing Touch", "Death Touch", "Emotion Manipulation", "Memory Reading", "Future Sight",
+    // Previous New Skills
+    "Astral Projection", "Energy Absorption", "Sound Manipulation", "Temperature Control", "Petrification",
+    "Molecular Manipulation", "Telekinesis", "Possession", "Curse Casting", "Blessing Bestowal",
+    "Reality Warping", "Chrono Vision", "Psychometry", "Divination", "Phase Shifting",
+    "Dimensional Travel", "Gravity Defiance", "Echo Location", "Aura Reading", "Essence Binding",
+    "Fate Weaving", "Rune Crafting", "Glyph Inscription", "Barrier Manipulation", "Chaos Induction",
+    "Order Restoration", "Vitality Transfer", "Elemental Fusion", "Spectral Sight", "Harmonic Resonance",
+    // New Skills Added Below (Including D&D-Inspired and Other Types)
+    "Pickpocketing", "Lockpicking", "Disguise Mastery", "Deception", "Persuasion", 
+    "Intimidation", "Investigation", "Survival Instinct", "Navigation", "Animal Handling",
+    "Acrobatics", "Athletics", "Sleight of Hand", "Performance", "Diplomacy",
+    "History Knowledge", "Arcane Knowledge", "Nature Knowledge", "Religion Knowledge", "Medicine",
+    "Trap Making", "Trap Disarming", "Camouflage", "Foraging", "Fishing",
+    "Climbing Mastery", "Swimming Mastery", "Riding Mastery", "Cartography", "Linguistics",
+    "Interrogation", "Bartering", "Appraisal", "Cooking", "Brewing",
+    "Poison Crafting", "Explosives Crafting", "Siege Weaponry", "Tactics", "Leadership",
+    "Energy Channeling", "Matter Transmutation", "Precognition", "Retrocognition", "Probability Manipulation",
+    "Density Control", "Size Alteration", "Voice Mimicry", "Memory Alteration", "Pain Suppression",
+    "Fear Induction", "Loyalty Command", "Charm Casting", "Sleep Induction", "Truth Detection",
+    "Elemental Summoning", "Construct Creation", "Golem Animation", "Pact Binding", "Sigil Mastery"
+];
+        
+const trapEffects = [
+    "Binding", "Damaging", "Transforming", "Teleporting", "Confusing", 
+    "Alarming", "Stealing", "Poisoning", "Freezing", "Burning",
+    "Paralyzing", "Mind Controlling", "Soul Trapping", "Memory Erasing",
+    "Power Draining", "Cursing", "Aging", "Temporal Locking", "Banishing",
+    "Polymorphing", "Duplicating", "Inverting", "Reality Warping",
+    "Hallucinating", "Mutating", "Disorienting", "Silencing", "Weakened",
+    "Summoning", "Exploding", "Magnetizing", "Bloodletting", "Illusion Casting",
+    "Fear Inducing", "Sleep Inducing", "Shadow Binding", "Petrifying",
+    "Gravity Distorting", "Shapeshifting", "Energy Leeching", "Dream Infiltrating",
+    "Echoing", "Arcane Feedback", "Screaming", "Corrupting", "Time Reversing",
+    "Soul Splitting", "Vortex Creating", "Flesh Warping", "Decomposing",
+    "Drowning", "Blinding", "Echo Chamber", "Curse Spreading"
+];
+
+        
+const spellDurations = [
+    "Instant", "Brief", "Temporary", "Lingering", "Permanent", 
+    "Cyclic", "Conditional", "Eternal", "Decaying", "Growing",
+    "Seasonal", "Lunar", "Solar", "Triggered", "Charged", "Cascading",
+    "Fleeting", "Gradual", "Intermittent", "Recurrent", "Phased",
+    "Ephemeral", "Resonant", "Tethered", "Adaptive", "Channeled",
+    "Echoing", "Rippling", "Overlapping", "Unstable", "Anchored",
+    "Expanding", "Shrinking", "Fading", "Stored", "Retriggering",
+    "Suspended", "Dormant", "Reviving", "Fractured", "Splintering",
+    "Amplifying", "Diminishing", "Bounded", "Shifting", "Recursive"
+];
+
+        
+const landFeatures = [
+    "River", "Lake", "Mountain", "Valley", "Hill", "Forest", "Cave", 
+    "Waterfall", "Geyser", "Volcano", "Cliff", "Beach", "Glacier", 
+    "Oasis", "Marsh", "Meadow", "Grove", "Crater", "Canyon", "Plateau",
+    "Ancient Ruins", "Standing Stones", "Magic Circle", "Crystal Formation",
+    "Lava Flow", "Hot Spring", "Quicksand", "Sinkhole", "Natural Bridge",
+    "Petrified Forest", "Coral Reef", "Bioluminescent Cave", "Ley Line Nexus",
+    "Tundra", "Swamp", "Desert", "Steppe", "Fjord", "Archipelago",
+    "Badlands", "Mesa", "Iceberg", "Kelp Forest", "Cenote", "Mangrove",
+    "Fungal Grove", "Haunted Moor", "Singing Cliffs", "Floating Island",
+    "Abyssal Rift", "Storm-Touched Wasteland", "Cursed Battlefield", "Whispering Dunes",
+    "Black Sand Beach", "Frozen Tundra", "Echoing Cavern", "Underground River",
+    "Astral Gateway", "Ruined Citadel", "Bleeding Stone", "Sunken City",
+    "Starfall Crater", "Glass Desert", "Shifting Mirage", "Howling Gorge",
+    "Bloodstained Marsh", "Celestial Observatory", "Forbidden Grove", "Enchanted Fen"
+];
+
+        
+const weaponTypes = [
+    "Sword", "Axe", "Bow", "Staff", "Wand", "Dagger", "Spear", 
+    "Hammer", "Mace", "Flail", "Whip", "Scythe", "Gauntlet", "Shield",
+    "Greatsword", "Halberd", "Crossbow", "Throwing Knives", "Chakram",
+    "War Fan", "Quarterstaff", "Sickle", "Trident", "Blowgun", "Claws",
+    "Rapier", "Katana", "Nunchaku", "Tetsubo", "Bo Staff", "Sai",
+    "Cutlass", "Falchion", "Glaive", "Morning Star", "Battleaxe", "Pike",
+    "Javelin", "Tomahawk", "Slingshot", "Khopesh", "Warhammer", "Longbow",
+    "Shortbow", "Repeating Crossbow", "Gunlance", "Dual Blades", "Shuriken",
+    "Boomerang", "Cestus", "Hook Sword", "Dragon Claw", "Scimitar", "Bayonet",
+    "Gunblade", "Harpoon", "Whisper Dagger", "Tonfa", "Yari", "Meteor Hammer",
+    "Odachi", "War Pick", "Throwing Axe", "Kanabo", "Fist Weapon", "Energy Blade"
+];
+
+        
+const weaponQualities = [
+    "Sharp", "Heavy", "Light", "Balanced", "Ancient", "Newly Forged",
+    "Cursed", "Blessed", "Sentient", "Silent", "Loud", "Precise", "Wild",
+    "Ornate", "Simple", "Crude", "Elegant", "Jagged", "Smooth", "Glowing",
+    "Unbreakable", "Rusty", "Enchanted", "Vorpal", "Bloodthirsty", "Vibrating",
+    "Ethereal", "Runed", "Humming", "Venomous", "Shifting", "Corrupted",
+    "Holy", "Profane", "Shadowforged", "Gilded", "Frosted", "Molten",
+    "Stormbound", "Ghostly", "Echoing", "Warped", "Indestructible",
+    "Draining", "Resonant", "Adaptive", "Barbed", "Pulsing", "Lifestealing",
+    "Haunted", "Frozen", "Explosive", "Flaming", "Arcane-infused", "Wraithbound",
+    "Demonic", "Celestial", "Soulforged", "Mirror-like", "Razor-edged", "Tainted"
+];
+
+        
+const nameAdjectives = [
+    "Ancient", "Mighty", "Dark", "Radiant", "Eternal", "Whispering", "Raging",
+    "Silent", "Hidden", "Fallen", "Rising", "Corrupted", "Pure", "Vengeful",
+    "Forgotten", "Arcane", "Divine", "Infernal", "Wild", "Tamed", "Primal",
+    "Celestial", "Abyssal", "Void", "Astral", "Eldritch", "Mystic", "Chaotic",
+    "Ordered", "Shifting", "Frozen", "Burning", "Thundering", "Gale", "Stone",
+    "Crystal", "Jade", "Iron", "Gold", "Silver", "Blood", "Bone", "Shadow", "Light",
+    "Stormborn", "Doomed", "Echoing", "Venomous", "Feral", "Twilight", "Shrouded",
+    "Unholy", "Sacred", "Blazing", "Tempest", "Phantom", "Eclipsed", "Dreadful",
+    "Runed", "Cursed", "Blessed", "Wraithbound", "Spectral", "Howling", "Glacial",
+    "Molten", "Gilded", "Ethereal", "Nightmare", "Demonic", "Stormforged",
+    "Hallowed", "Unyielding", "Lunar", "Solar", "Dusk", "Dawn", "Bloodstained",
+    "Forsaken", "Haunted", "Drowned", "Warped", "Petrified", "Tainted",
+    "Immortal", "Resonant", "Mirrored", "Undying", "Veiled", "Weeping", "Gloaming",
+    "Starforged", "Crimson", "Viridian", "Sable", "Wicked", "Ghastly", "Runebound",
+
+    // Historical & Legendary Inspired Adjectives
+    "The Conqueror", "The Cunning", "The Merciless", "The Valiant", "The Black",
+    "The Bold", "The Resolute", "The Ruthless", "The Unforgiven", "The Oathbound",
+    "The Relentless", "The Dread", "The Undying", "The Banished", "The Lone Wolf",
+    "The Unchained", "The Harbinger", "The Crimson", "The Pale", "The Mad",
+    "The Thunderous", "The Serpent", "The Wolfborn", "The Deathless", "The Grim",
+    "The Warlord", "The Forsworn", "The Stormtouched", "The Eclipse", "The Gilded",
+    "The Voidtouched", "The Undaunted", "The Warbringer", "The Unseeing", "The Devourer",
+    "The Shadowborn", "The Fatebinder", "The Bloodied", "The Unraveled", "The Ruined",
+    "The Fallen Star", "The Last", "The Wanderer", "The Hollow", "The Hunted",
+    "The Fated", "The Eternal Flame", "The Coldhearted", "The Doomcaller",
+    "The Plaguebearer", "The Phantom", "The Kingslayer", "The Moonlit",
+    "The Soulforged", "The Lightbringer", "The Iceborn", "The Earthshaker",
+    "The Hellbound", "The Firehearted", "The Ironclad", "The Sable Knight",
+    "The Silverfang", "The Bonecarver", "The Dreamwalker", "The Azure",
+    "The Wraithlord", "The Pale Rider", "The Ravenous", "The Warlock's Bane",
+    "The Riddlekeeper", "The Fiery", "The Black Sun", "The Tyrant's End",
+    "The Hollowed", "The Godslayer", "The Blight", "The Unrelenting"
+];
+
+        
+const nameNouns = [
+    "Walker", "Blade", "Caster", "Spirit", "Warden", "Guardian", "Hunter",
+    "Seeker", "Bane", "Harbinger", "Champion", "Destroyer", "Creator", "Mender",
+    "Heart", "Soul", "Mind", "Eye", "Hand", "Voice", "Whisper", "Roar", "Song",
+    "Dancer", "Keeper", "Slayer", "Binder", "Breaker", "Weaver", "Smith", "Sage",
+    "Oracle", "Prophet", "Doom", "Glory", "Honor", "Fury", "Peace", "Storm", "Tide",
+    "Mountain", "Forest", "Sky", "Depth", "Void", "Star", "Moon", "Sun", "Flame", "Frost",
+
+    // Expanded with more evocative nouns
+    "Titan", "Vanguard", "Echo", "Vessel", "Witch", "Ember", "Shade", "Warlord",
+    "Spectre", "Fury", "Vigil", "Phantom", "Reaver", "Frostbite", "Witcher", "Dreamer",
+    "Sentinel", "Enigma", "Rogue", "Wrath", "Harbinger", "Mourner", "Vessel", "Fang",
+    "Shadow", "Mirage", "Emissary", "Druid", "Revenant", "Stormbringer", "Wraith", "Knight",
+    "Drake", "Sellsword", "Watcher", "Seer", "Vengeful", "Coven", "Berserker", "Bard",
+    "Basilisk", "Shade", "Gale", "Inferno", "Tempest", "Frostborn", "Stormcaller", "Warden",
+    "Hound", "Champion", "Avenger", "Terror", "Vindicator", "Harvester", "Soulbinder",
+    "Witchblade", "Knightmare", "Sorrow", "Stalker", "Reaper", "Tamer", "Unbound", "Titan",
+    "Enforcer", "Sovereign", "Bloodhound", "Gladiator", "Seeker", "Outlaw", "Crusader",
+    "Severer", "Grim", "Scourge", "Sentinel", "Ravager", "Sentient", "Pioneer", "Hunter",
+    "Fateweaver", "Wraithlord", "Doombringer",
+
+    // Historical and legendary terms
+    "Caesar", "Samurai", "Spartan", "Templar", "Viking", "Mongol", "Pharaoh", "Czar",
+    "Emperor", "Barbarian", "Knight-Errant", "Gladiator", "Druidess", "Legionnaire", "Conqueror",
+    "Sultan", "Mamluk", "Warlord", "Visigoth", "Berserker", "Tudor", "Valkyrie", "Alchemist",
+    "Shaman", "Witchking", "Celt", "Assassin", "Savant", "Czarina", "Scribe", "Monk", "Pirate",
+    "Valkyr", "Ranger", "Hussar", "Knight-Marshal", "Scribe", "Sovereign", "Pirate King",
+    "Pasha", "Sultan", "Witchhunter", "Empress", "Pillager", "Exile", "Bandit", "Giant", "Philosopher",
+    "Fool", "Legend", "Marauder", "Cursebreaker", "Crown", "Duchess", "General", "Basilisk",
+    "Brigand", "Witchdoctor", "Seeress", "Gladiator", "Bishop", "Lich", "Saint", "Philosopher",
+    "Witchqueen", "Tribune", "Wanderer", "Pioneer", "Explorer", "Inquisitor", "Heretic"
+];
+
+        
+        // Utility function to get random item from an array
+        function getRandomItem(array) {
+            return array[Math.floor(Math.random() * array.length)];
+        }
+        
+// Additional arrays for more name variety
+const namePrefixes = [
+    "High", "Low", "Great", "Lesser", "Grand", "Petty",
+    "Arch", "Prime", "Elder", "Young", "First", "Last",
+    "True", "False", "Lost", "Found", "Sacred", "Profane",
+    
+    // Expanded with more prefixes
+    "Dark", "Light", "Dread", "Holy", "Infernal", "Celestial",
+    "Ancient", "Eternal", "Forbidden", "Shrouded", "Hidden", "Veiled",
+    "Shadow", "Iron", "Silver", "Golden", "Crimson", "Cursed",
+    "Blessed", "Storm", "Fire", "Frost", "Ice", "Blood",
+    "Silent", "Echoing", "Whispered", "Doomed", "Forgotten", "Mystic",
+    "Secret", "Hallowed", "Fallen", "Exalted", "Twilight", "Gilded",
+    "Runed", "Phantom", "Spectral", "Weeping", "Undying", "Unbound",
+    "Radiant", "Moonlit", "Solar", "Lunar", "Feral", "Primal",
+    "Arcane", "Divine", "Infernal", "Void", "Abyssal", "Stormforged",
+    "Stormborn", "Tempest", "Wraith", "Nightmare", "Mirrored", "Resonant",
+    "Starborn", "Dawning", "Duskborn", "Eclipsed", "Runebound", "Gloaming",
+    "Warped", "Bound", "Tainted", "Ember", "Glacial", "Empress's",
+    "King's", "Queen's", "Sovereign", "Warlord's", "Titan's", "Chained"
+];
+
+
+const nameSuffixes = [
+    "born", "forged", "touched", "blessed", "cursed",
+    "sworn", "bound", "freed", "marked", "chosen",
+    "fallen", "risen", "wrought", "shaped", "crafted",
+
+    // Expanded with more suffixes
+    "seeker", "bringer", "walker", "weaver", "speaker",
+    "caller", "keeper", "watcher", "hunter", "mender",
+    "wraith", "singer", "dancer", "reaper", "bane",
+    "fury", "storm", "fang", "gale", "wrath",
+    "shade", "cloak", "veil", "whisper", "howl",
+    "stalker", "crusher", "cleaver", "smasher", "warden",
+    "harbinger", "prophet", "oracle", "herald", "doom",
+    "shatter", "scorn", "bane", "flame", "frost",
+    "fang", "talon", "claw", "spirit", "echo",
+    "phantom", "sovereign", "soother", "haunt", "vessel",
+    "chained", "unbound", "tempest", "shroud", "gloam",
+    "runed", "cinder", "pyre", "ember", "drake",
+    "titan", "specter", "scourge", "gazer", "seer",
+    "watch", "doom", "sorrow", "tide", "mourner",
+    "eclipsed", "twilight", "starborn", "fate", "vow",
+    "oath", "heart", "soul", "mind", "veil"
+];
+
+
+// Upgraded generateFantasyName function
+function generateFantasyName(attributes) {
+    let name = "";
+    const rand = Math.random();
+    
+    // Different name generation based on card type
+    switch(attributes.cardType) {
+        case "Land":
+            // Three possible structures for Land names
+            if (rand < 0.33) {
+                name = `${getRandomItem(namePrefixes)} ${attributes.terrain} of ${getRandomItem(nameAdjectives)} ${getRandomItem(nameNouns)}`;
+            } else if (rand < 0.66) {
+                name = `The ${getRandomItem(nameAdjectives)} ${attributes.terrain}`;
+            } else {
+                name = `${attributes.terrain} of ${getRandomItem(nameAdjectives)} ${getRandomItem(nameNouns)}`;
+            }
+            break;
+
+        case "Creature":
+        case "Entity":
+            // Multiple naming patterns with racial and attribute integration
+            const patterns = [
+                () => `${getRandomItem(nameAdjectives)} ${getRandomItem(nameNouns)}, the ${attributes.personality} ${attributes.race}`,
+                () => `${attributes.race} ${getRandomItem(namePrefixes)}-${getRandomItem(nameNouns)}`,
+                () => `${attributes.personality} ${attributes.race} of ${getRandomItem(nameAdjectives)} ${attributes.role}`,
+                () => `${getRandomItem(nameAdjectives)} ${attributes.race} ${getRandomItem(nameNouns)}-${getRandomItem(nameSuffixes)}`,
+                () => `${attributes.name || (getRandomItem(namePrefixes) + " " + attributes.race)} the ${attributes.role}`
+            ];
+            name = patterns[Math.floor(Math.random() * patterns.length)]();
+            break;
+
+        case "Spell":
+            // Enhanced spell names with magic type integration
+            const spellEndings = [
+                "Burst", "Blast", "Wave", "Strike", "Touch", 
+                "Binding", "Summoning", "Conjuring", "Enchantment",
+                "Ritual", "Curse", "Blessing", "Pulse", "Veil"
+            ];
+            if (rand < 0.5) {
+                name = `${getRandomItem(nameAdjectives)} ${attributes.magicType} ${getRandomItem(spellEndings)}`;
+            } else {
+                name = `${attributes.magicType} of ${getRandomItem(nameAdjectives)} ${getRandomItem(nameNouns)}`;
+            }
+            break;
+
+        case "Trap":
+            // More varied trap names with effect integration
+            const trapEndings = [
+                "Snare", "Trap", "Pitfall", "Trigger", "Mechanism",
+                "Device", "Ward", "Sigil", "Ambush", "Lure"
+            ];
+            if (rand < 0.5) {
+                name = `${getRandomItem(nameAdjectives)} ${attributes.trapEffect} ${getRandomItem(trapEndings)}`;
+            } else {
+                name = `${attributes.trapEffect} ${getRandomItem(trapEndings)} of ${getRandomItem(nameAdjectives)} ${attributes.terrain}`;
+            }
+            break;
+    }
+
+    // Additional polish: capitalize each word and trim
+    name = name.split(" ")
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(" ")
+        .trim();
+
+    // Occasionally add a title prefix (20% chance)
+    if (Math.random() < 0.2) {
+        const titles = ["Lord", "Lady", "Master", "Mistress", "Sir", "Dame"];
+        name = `${getRandomItem(titles)} ${name}`;
+    }
+
+    return name;
+}        
+        // Function to generate creature skills
+        function generateCreatureSkills(count = 3) {
+            const skills = [];
+            const availableSkills = [...creatureSkills]; // Copy array to avoid modifying original
+            
+            for (let i = 0; i < count; i++) {
+                if (availableSkills.length === 0) break;
+                
+                // Get random index
+                const index = Math.floor(Math.random() * availableSkills.length);
+                
+                // Add skill to result and remove from available skills
+                skills.push(availableSkills[index]);
+                availableSkills.splice(index, 1);
+            }
+            
+            return skills;
+        }
+        
+        // Function to generate attributes based on card type
+        function generateAttributes(forcedCardType = null) {
+            const cardType = forcedCardType && forcedCardType !== "random" ? 
+                forcedCardType : getRandomItem(cardTypes);
+                
+            let attributes = {
+                cardType: cardType,
+                nature: getRandomItem(natures),
+                mood: getRandomItem(moods),
+                rarity: getRandomItem(rarity),
+                color: getRandomItem(colors),
+                timeOfDay: getRandomItem(timeOfDay),
+                weather: getRandomItem(weather),
+                season: getRandomItem(seasons)
+            };
+            
+            // Add specific attributes based on card type
+            switch(cardType) {
+                case "Land":
+                    attributes.terrain = getRandomItem(terrains);
+                    attributes.landFeature = getRandomItem(landFeatures);
+                    break;
+                case "Creature":
+                case "Entity":
+                    attributes.race = getRandomItem(races);
+                    attributes.personality = getRandomItem(personalities);
+                    attributes.role = getRandomItem(creatureRoles);
+                    attributes.powerLevel = getRandomItem(powerLevels);
+                    attributes.skills = generateCreatureSkills(3);
+                    attributes.weapon = Math.random() > 0.3 ? getRandomItem(weaponTypes) : null;
+                    if (attributes.weapon) {
+                        attributes.weaponQuality = getRandomItem(weaponQualities);
+                    }
+                    break;
+                case "Spell":
+                    attributes.magicType = getRandomItem(magicTypes);
+                    attributes.duration = getRandomItem(spellDurations);
+                    attributes.powerLevel = getRandomItem(powerLevels);
+                    break;
+                case "Trap":
+                    attributes.trapEffect = getRandomItem(trapEffects);
+                    attributes.terrain = getRandomItem(terrains);
+                    break;
+            }
+            
+            // Generate a fantasy name
+            attributes.name = generateFantasyName(attributes);
+            
+            return attributes;
+        }
+        
+function generateImagePrompt(attributes) {
+    let basePrompt = "";
+    let details = [];
+    let composition = "";
+    
+    // Art style variations
+    const artStyles = [
+        "cinematic", "surrealist", "realistic", "concept art",
+        "watercolor", "oil painting", "digital art", "steampunk",
+        "cyberpunk", "baroque", "impressionist", "fantasy illustration"
+    ];
+    
+    // Camera angles
+    const cameraAngles = [
+        "wide shot", "close-up", "aerial view", "low angle",
+        "high angle", "eye-level", "dramatic perspective",
+        "over-the-shoulder", "profile view"
+    ];
+    
+    // Additional details
+    const detailEnhancers = [
+        "intricate details", "subtle textures", "dynamic shadows",
+        "ethereal glow", "mystical ambiance", "vivid contrasts",
+        "delicate linework", "bold silhouettes"
+    ];
+
+    // Build base prompt based on card type
+    switch(attributes.cardType) {
+        case "Land":
+            basePrompt = `A ${getRandomItem(cameraAngles)} of a sprawling ${attributes.rarity.toLowerCase()} ${attributes.terrain.toLowerCase()}`;
+            
+            details.push(`dominated by a ${attributes.mood.toLowerCase()} ${attributes.landFeature.toLowerCase()} glowing with ${attributes.color.toLowerCase()} tones`);
+            details.push(`set during ${attributes.timeOfDay.toLowerCase()} in the ${attributes.season.toLowerCase()} season`);
+            details.push(`enveloped in ${attributes.weather.toLowerCase()} conditions that enhance its ${attributes.nature.toLowerCase()} essence`);
+            details.push(`scattered with remnants of ${getRandomItem(nameAdjectives).toLowerCase()} ruins`);
+            details.push(`where the air hums with a ${getRandomItem(moods).toLowerCase()} energy`);
+            details.push(`framed by distant ${getRandomItem(terrains).toLowerCase()} horizons`);
+            break;
+            
+        case "Creature":
+            basePrompt = `A ${getRandomItem(cameraAngles)} of a ${attributes.rarity.toLowerCase()} ${attributes.race.toLowerCase()} ${attributes.role.toLowerCase()}`;
+            
+            if (attributes.weapon) {
+                details.push(`wielding a ${attributes.weaponQuality.toLowerCase()} ${attributes.weapon.toLowerCase()} infused with ${getRandomItem(magicTypes).toLowerCase()} power`);
+            }
+            
+            details.push(`clad in ${attributes.color.toLowerCase()} garments reflecting their ${attributes.personality.toLowerCase()} nature`);
+            details.push(`standing in a ${attributes.mood.toLowerCase()} pose exuding ${attributes.powerLevel.toLowerCase()} might`);
+            details.push(`surrounded by a ${attributes.nature.toLowerCase()} aura that ripples with ${getRandomItem(colors).toLowerCase()} sparks`);
+            
+            if (attributes.skills && attributes.skills.length > 0) {
+const skillEffects = {
+    "Flight": "soaring through the air",
+    "Invisibility": "with a faint shimmering outline",
+    "Elemental Control": `manipulating swirling ${attributes.color.toLowerCase()} elements`,
+    "Teleportation": "emerging from a portal",
+    "Shapeshifting": "mid-transformation",
+
+    // New Skill Effects
+    "Mind Reading": "staring intently as thoughts ripple around them",
+    "Regeneration": "rapidly healing from wounds",
+    "Super Strength": "lifting an immense weight effortlessly",
+    "Underwater Breathing": "exhaling bubbles while remaining submerged",
+    "Night Vision": "eyes glowing faintly in the dark",
+    "Poison Resistance": "neutralizing toxins within their veins",
+    "Magic Resistance": "deflecting arcane energy with an unseen barrier",
+    "Spell Casting": "chanting while ethereal runes swirl around them",
+    "Summoning": "calling forth creatures from another realm",
+    "Beast Taming": "whispering to creatures that obey their will",
+    "Weapon Mastery": "wielding weapons with effortless precision",
+    "Stealth": "melting into the shadows",
+    "Tracking": "analyzing footprints and subtle disturbances",
+    "Crafting": "skillfully forging something with precise hands",
+    "Alchemy": "mixing potent ingredients in a bubbling flask",
+    "Herbalism": "gathering rare herbs with a practiced touch",
+    "Telepathy": "communicating without words, eyes glowing softly",
+    "Illusion Creation": "warping reality with phantom images",
+    "Spirit Walking": "fading between the material and spectral realms",
+    "Soul Manipulation": "weaving strands of life essence",
+    "Blood Magic": "sacrificing vitality to fuel powerful spells",
+    "Necromancy": "raising the dead with dark incantations",
+    "Life Draining": "siphoning energy from a weakened foe",
+    "Force Field Creation": "erecting an impenetrable barrier",
+    "Time Manipulation": "warping time's flow with a flick of their hand",
+    "Gravity Control": "making objects heavier or lighter at will",
+    "Shadow Walking": "slipping seamlessly into the darkness",
+    "Light Bending": "distorting light to vanish from sight",
+    "Weather Control": "summoning tempests or calming the skies",
+    "Portal Creation": "ripping a doorway through space",
+    "Dream Walking": "stepping into another's dreams",
+    "Healing Touch": "mending wounds with a warm radiance",
+    "Death Touch": "draining the very life from a target",
+    "Emotion Manipulation": "altering feelings with a mere gaze",
+    "Memory Reading": "seeing into another's past",
+    "Future Sight": "gazing into the strands of destiny",
+    "Astral Projection": "leaving their body as a spectral form",
+    "Energy Absorption": "drawing power from an incoming attack",
+    "Sound Manipulation": "warping soundwaves to silence or amplify noise",
+    "Temperature Control": "raising or lowering the ambient heat",
+    "Petrification": "turning flesh to stone with a piercing gaze",
+    "Molecular Manipulation": "reconfiguring matter at will",
+    "Telekinesis": "lifting and throwing objects with invisible force",
+    "Possession": "seizing control of another's body",
+    "Curse Casting": "bestowing a dark malediction upon a foe",
+    "Blessing Bestowal": "infusing others with divine favor",
+    "Reality Warping": "bending the laws of existence itself",
+    "Chrono Vision": "peering through the flow of time",
+    "Psychometry": "reading the history of an object by touch",
+    "Divination": "foreseeing the course of events",
+    "Phase Shifting": "passing through solid objects effortlessly",
+    "Dimensional Travel": "stepping into another plane of existence",
+    "Gravity Defiance": "hovering weightlessly above the ground",
+    "Echo Location": "sensing surroundings through sound waves",
+    "Aura Reading": "perceiving the energies that surround beings",
+    "Essence Binding": "linking souls through an unseen force",
+    "Fate Weaving": "twisting probability to their favor",
+    "Rune Crafting": "etching powerful glyphs into objects",
+    "Glyph Inscription": "imprinting magical sigils onto surfaces",
+    "Barrier Manipulation": "shaping protective wards and shields",
+    "Chaos Induction": "unleashing unpredictable bursts of energy",
+    "Order Restoration": "stabilizing reality with precise magic",
+    "Vitality Transfer": "sacrificing health to empower another",
+    "Elemental Fusion": "combining elements into a devastating force",
+    "Spectral Sight": "seeing into the realm of spirits",
+    "Harmonic Resonance": "tuning into the mystical frequencies of the world",
+    "Pickpocketing": "swiping valuables with subtle finesse",
+    "Lockpicking": "unraveling complex locks with ease",
+    "Disguise Mastery": "altering appearance with practiced skill",
+    "Deception": "weaving intricate falsehoods effortlessly",
+    "Persuasion": "influencing others with carefully chosen words",
+    "Intimidation": "exerting fear through sheer presence",
+    "Investigation": "piecing together clues with sharp insight",
+    "Survival Instinct": "adapting swiftly to life-threatening situations",
+    "Navigation": "finding paths even in uncharted territory",
+    "Animal Handling": "calming and directing beasts with ease",
+    "Acrobatics": "performing feats of agility with grace",
+    "Athletics": "displaying impressive physical prowess",
+    "Sleight of Hand": "executing quick and dexterous maneuvers",
+    "Performance": "captivating audiences with skill and charm",
+    "Diplomacy": "negotiating with wisdom and tact",
+    "History Knowledge": "recalling detailed accounts of the past",
+    "Arcane Knowledge": "understanding the deepest secrets of magic",
+    "Nature Knowledge": "deciphering the patterns of the natural world",
+    "Religion Knowledge": "interpreting divine mysteries and rituals",
+    "Medicine": "treating wounds with skill and precision",
+    "Trap Making": "constructing devious mechanisms",
+    "Trap Disarming": "rendering deadly devices harmless",
+    "Camouflage": "blending seamlessly into surroundings",
+    "Foraging": "locating useful materials in the wild",
+    "Fishing": "expertly catching aquatic creatures",
+    "Climbing Mastery": "scaling sheer surfaces effortlessly",
+    "Swimming Mastery": "navigating waters with ease",
+    "Riding Mastery": "controlling mounts with precision",
+    "Cartography": "charting the unknown with expert accuracy",
+    "Linguistics": "deciphering and speaking diverse languages",
+    "Interrogation": "extracting secrets with careful questioning",
+    "Bartering": "striking favorable deals with ease",
+    "Appraisal": "determining the value of objects",
+    "Cooking": "preparing meals that invigorate and inspire",
+    "Brewing": "concocting potent drinks and potions",
+    "Poison Crafting": "creating lethal and subtle toxins",
+    "Explosives Crafting": "constructing powerful incendiaries",
+    "Siege Weaponry": "operating devastating war machines",
+    "Tactics": "orchestrating battle strategies",
+    "Leadership": "inspiring and commanding others",
+    "Energy Channeling": "directing raw power into focused attacks",
+    "Matter Transmutation": "altering the composition of materials",
+    "Precognition": "sensing imminent danger",
+    "Retrocognition": "witnessing past events through echoes",
+    "Probability Manipulation": "tilting fate in unpredictable ways",
+    "Density Control": "making objects solidify or become intangible",
+    "Size Alteration": "shrinking or enlarging at will",
+    "Voice Mimicry": "imitating sounds and speech perfectly",
+    "Memory Alteration": "rewriting or erasing memories",
+    "Pain Suppression": "enduring injuries without faltering",
+    "Fear Induction": "instilling terror with a mere glance",
+    "Loyalty Command": "compelling unwavering devotion",
+    "Charm Casting": "influencing others with supernatural allure",
+    "Sleep Induction": "lulling targets into a deep slumber",
+    "Truth Detection": "perceiving lies with uncanny accuracy",
+    "Elemental Summoning": "calling forth beings of pure elemental force",
+    "Construct Creation": "shaping lifeless materials into servitors",
+    "Golem Animation": "bringing massive stone or metal guardians to life",
+    "Pact Binding": "forging supernatural agreements with entities",
+    "Sigil Mastery": "inscribing symbols that radiate arcane power"
+};
+                const primarySkill = attributes.skills[0];
+                details.push(skillEffects[primarySkill] || `showcasing ${primarySkill.toLowerCase()} with ${getRandomItem(natures).toLowerCase()} flair`);
+            }
+            
+            details.push(`beneath a ${attributes.timeOfDay.toLowerCase()} sky with ${attributes.weather.toLowerCase()} elements`);
+            details.push(`etched with scars or markings of ${getRandomItem(nameAdjectives).toLowerCase()} origin`);
+            break;
+            
+        case "Entity":
+            basePrompt = `A ${getRandomItem(cameraAngles)} of a ${attributes.powerLevel.toLowerCase()} ${attributes.race.toLowerCase()} entity`;
+            
+            details.push(`radiating a ${attributes.nature.toLowerCase()} presence tinged with ${attributes.color.toLowerCase()} light`);
+            details.push(`with a ${attributes.personality.toLowerCase()} demeanor shaping a ${attributes.mood.toLowerCase()} aura`);
+            details.push(`standing amid a ${getRandomItem(terrains).toLowerCase()} warped by its ${getRandomItem(magicTypes).toLowerCase()} influence`);
+            details.push(`its form adorned with ${getRandomItem(nameAdjectives).toLowerCase()} runes`);
+            
+            if (attributes.skills && attributes.skills.length > 0) {
+                const skillCombo = attributes.skills.slice(0, 2)
+                    .map(s => `${s.toLowerCase()} with ${getRandomItem(colors).toLowerCase()} energy`)
+                    .join(" and ");
+                details.push(`mastering ${skillCombo}`);
+            }
+            
+            details.push(`casting shadows that hint at its ${attributes.rarity.toLowerCase()} legend`);
+            details.push(`under a ${attributes.timeOfDay.toLowerCase()} ${attributes.weather.toLowerCase()} sky`);
+            break;
+            
+        case "Spell":
+            basePrompt = `A ${getRandomItem(cameraAngles)} of a ${attributes.rarity.toLowerCase()} ${attributes.magicType.toLowerCase()} spell`;
+            
+            details.push(`unleashing ${attributes.powerLevel.toLowerCase()} ${attributes.color.toLowerCase()} energy in a ${attributes.nature.toLowerCase()} cascade`);
+            details.push(`weaving a ${attributes.mood.toLowerCase()} tapestry across a ${getRandomItem(terrains).toLowerCase()}`);
+            details.push(`with ${attributes.duration.toLowerCase()} effects that shimmer with ${getRandomItem(colors).toLowerCase()} accents`);
+            details.push(`etched with ${getRandomItem(nameAdjectives).toLowerCase()} sigils that pulse in the air`);
+            details.push(`cast during ${attributes.timeOfDay.toLowerCase()} under ${attributes.weather.toLowerCase()} skies`);
+            details.push(`evoking a sense of ${getRandomItem(moods).toLowerCase()} wonder`);
+            break;
+            
+        case "Trap":
+            basePrompt = `A ${getRandomItem(cameraAngles)} of a ${attributes.rarity.toLowerCase()} ${attributes.trapEffect.toLowerCase()} trap`;
+            
+            details.push(`lurking within a ${attributes.terrain.toLowerCase()} imbued with ${attributes.nature.toLowerCase()} power`);
+            details.push(`camouflaged by ${attributes.color.toLowerCase()} ${getRandomItem(landFeatures).toLowerCase()} markings`);
+            details.push(`exuding a ${attributes.mood.toLowerCase()} tension beneath ${attributes.timeOfDay.toLowerCase()} light`);
+            details.push(`its ${getRandomItem(nameAdjectives).toLowerCase()} mechanism poised to unleash chaos`);
+            details.push(`set against a ${attributes.weather.toLowerCase()} backdrop`);
+            details.push(`guarded by faint whispers of ${getRandomItem(natures).toLowerCase()} energy`);
+            break;
+    }
+
+    // Add seasonal and environmental enhancements
+    details.push(`in the ${attributes.season.toLowerCase()} season, with subtle ${getRandomItem(weather).toLowerCase()} undertones`);
+
+    // Composition and style
+    composition = [
+        `rendered as a ${getRandomItem(artStyles)} masterpiece`,
+        `${getRandomItem(detailEnhancers)}`,
+        `bathed in ${attributes.color.toLowerCase()}-tinged atmospheric effects`,
+        `with a ${getRandomItem(moods).toLowerCase()} cinematic flair`,
+        `intricately detailed with ${getRandomItem(natures).toLowerCase()} undertones`,
+        Math.random() > 0.5 ? "dreamlike depth of field" : "razor-sharp clarity"
+    ].join(", ");
+
+    // Combine all parts
+    const finalPrompt = `${basePrompt}, ${details.join(", ")}, ${composition}.`;
+    return finalPrompt;
+}
+        
+        // Function to generate text prompt
+        function generateTextPrompt(attributes) {
+            let prompt = "";
+            
+            switch(attributes.cardType) {
+                case "Land":
+                    prompt = `Describe "${attributes.name}" in rich detail. This ${attributes.mood.toLowerCase()} ${attributes.terrain.toLowerCase()} features a dramatic ${attributes.landFeature.toLowerCase()} as its focal point. Currently in the season of ${attributes.season.toLowerCase()}, during ${attributes.timeOfDay.toLowerCase()}, with ${attributes.weather.toLowerCase()} atmospheric conditions. The landscape is bathed in ethereal ${attributes.color.toLowerCase()} light, giving it a ${attributes.nature.toLowerCase()} quality. What ancient secrets or forgotten history might this place hold? What unique flora and fauna have adapted to this environment? How do travelers or inhabitants interact with this location, and what dangers or wonders await those who visit?`;
+                    break;
+                    
+                case "Creature":
+                    let skillsText = "";
+                    if (attributes.skills && attributes.skills.length > 0) {
+                        skillsText = attributes.skills.join(", ");
+                    }
+                    
+                    let weaponText = "";
+                    if (attributes.weapon) {
+                        weaponText = `They wield a ${attributes.weaponQuality.toLowerCase()} ${attributes.weapon.toLowerCase()} that complements their fighting style.`;
+                    }
+                    
+                    prompt = `Create a detailed character profile for "${attributes.name}". This ${attributes.personality.toLowerCase()} ${attributes.race.toLowerCase()} ${attributes.role.toLowerCase()} possesses a ${attributes.nature.toLowerCase()} nature that influences all their actions. They are considered ${attributes.powerLevel.toLowerCase()} among their kind, with distinctive ${attributes.color.toLowerCase()} accents in their appearance and equipment. ${weaponText} They have mastered the skills of ${skillsText}, which they use to overcome challenges and achieve their goals. Describe their physical appearance in detail, including any unique features or characteristics. What is their personal history? What motivates them and what are their ultimate ambitions? What allies and enemies have they made on their journey? How do they approach conflict, and what personal code or philosophy guides their decisions?`;
+                    break;
+                    
+                case "Entity":
+                    let entitySkillsText = "";
+                    if (attributes.skills && attributes.skills.length > 0) {
+                        entitySkillsText = attributes.skills.join(", ");
+                    }
+                    
+                    prompt = `Describe the powerful being known as "${attributes.name}". This ${attributes.powerLevel.toLowerCase()} ${attributes.race.toLowerCase()} entity embodies ${attributes.nature.toLowerCase()} energy in its purest form. It possesses a distinctly ${attributes.personality.toLowerCase()} demeanor and radiates intense ${attributes.color.toLowerCase()} energy that transforms its surroundings. This entity has mastered ${entitySkillsText}, using these abilities to fulfill its ancient purpose. Detail its origins, appearance, and the ${attributes.mood.toLowerCase()} atmosphere it creates wherever it manifests. Is it bound to a specific location or condition? What legends or myths surround this entity? How do different cultures or civilizations interpret its existence? What might someone seek from this entity, and what price would they pay for its favor?`;
+                    break;
+                    
+                case "Spell":
+                    prompt = `Detail the magical phenomenon known as "${attributes.name}". This ${attributes.powerLevel.toLowerCase()} ${attributes.magicType.toLowerCase()} spell has ${attributes.nature.toLowerCase()} properties that make it ${attributes.rarity.toLowerCase()} among magic users. When cast, it manifests as brilliant ${attributes.color.toLowerCase()} energy in complex patterns and creates a ${attributes.mood.toLowerCase()} effect that transforms the surroundings. This ${attributes.duration.toLowerCase()} spell requires specific components and gestures to cast successfully. Explain the full effects of this spell when properly cast, its limitations, and potential consequences if misused. What is the history behind this spell's creation? Which types of spellcasters are drawn to its use, and for what purposes? Are there countermeasures or defenses against it? How might this spell be modified or combined with other magics to create new effects?`;
+
+prompt = `Detail the magical phenomenon known as "${attributes.name}". This ${attributes.powerLevel.toLowerCase()} ${attributes.magicType.toLowerCase()} spell has ${attributes.nature.toLowerCase()} properties that make it ${attributes.rarity.toLowerCase()} among magic users. When cast, it manifests as brilliant ${attributes.color.toLowerCase()} energy in complex patterns and creates a ${attributes.mood.toLowerCase()} effect that transforms the surroundings. This ${attributes.duration.toLowerCase()} spell requires specific components and gestures to cast successfully. Explain the full effects of this spell when properly cast, its limitations, and potential consequences if misused. What is the history behind this spell's creation? Which types of spellcasters are drawn to its use, and for what purposes? Are there countermeasures or defenses against it? How might this spell be modified or combined with other magics to create new effects?`;
+                    break;
+                    
+                case "Trap":
+                    prompt = `Describe the deadly device known as "${attributes.name}". This cunningly hidden ${attributes.trapEffect.toLowerCase()} trap is typically set within a ${attributes.terrain.toLowerCase()} environment. Its subtle, almost imperceptible ${attributes.color.toLowerCase()} markings blend with surroundings, making it difficult to detect before it's too late. The trap creates a ${attributes.mood.toLowerCase()} atmosphere that might warn the most observant travelers. Its intricate ${attributes.nature.toLowerCase()} mechanism waits silently to be triggered. Detail exactly how this trap functions mechanically. What triggers it, and what is the full sequence of its activation? Who might create such a trap, and for what purpose? How might it be detected or disarmed safely? What clues might hint at its presence to the wary explorer? How has this trap design evolved over time, and are there regional variants?`;
+                    break;
+            }
+            
+            return prompt;
+        }
+        
+let currentAttributes = null;
+
+function generatePrompts() {
+    const cardTypeSelect = document.getElementById('cardTypeSelect');
+    const selectedCardType = cardTypeSelect.value;
+    
+    // Generate attributes based on selected card type
+    currentAttributes = generateAttributes(selectedCardType);
+    
+    // Generate prompts
+    const imagePrompt = generateImagePrompt(currentAttributes);
+    const textPrompt = generateTextPrompt(currentAttributes);
+    
+    // Update UI
+    document.getElementById('entityName').innerText = currentAttributes.name;
+    document.getElementById('imagePrompt').innerText = imagePrompt;
+    document.getElementById('textPrompt').innerText = textPrompt;
+    
+    // Update attributes displays
+    let imageAttributes = "";
+    let textAttributes = "";
+    
+    switch(currentAttributes.cardType) {
+        case "Land":
+            imageAttributes = `Type: ${currentAttributes.cardType} | Terrain: ${currentAttributes.terrain} | Feature: ${currentAttributes.landFeature} | Mood: ${currentAttributes.mood}`;
+            textAttributes = `Type: ${currentAttributes.cardType} | Terrain: ${currentAttributes.terrain} | Nature: ${currentAttributes.nature} | Rarity: ${currentAttributes.rarity}`;
+            break;
+        case "Creature":
+        case "Entity":
+            imageAttributes = `Type: ${currentAttributes.cardType} | Race: ${currentAttributes.race} | Role: ${currentAttributes.role} | Power: ${currentAttributes.powerLevel}`;
+            textAttributes = `Type: ${currentAttributes.cardType} | Race: ${currentAttributes.race} | Personality: ${currentAttributes.personality} | Skills: ${currentAttributes.skills.join(", ")}`;
+            break;
+        case "Spell":
+            imageAttributes = `Type: ${currentAttributes.cardType} | Magic: ${currentAttributes.magicType} | Power: ${currentAttributes.powerLevel} | Duration: ${currentAttributes.duration}`;
+            textAttributes = `Type: ${currentAttributes.cardType} | Magic: ${currentAttributes.magicType} | Nature: ${currentAttributes.nature} | Rarity: ${currentAttributes.rarity}`;
+            break;
+        case "Trap":
+            imageAttributes = `Type: ${currentAttributes.cardType} | Effect: ${currentAttributes.trapEffect} | Terrain: ${currentAttributes.terrain} | Mood: ${currentAttributes.mood}`;
+            textAttributes = `Type: ${currentAttributes.cardType} | Effect: ${currentAttributes.trapEffect} | Nature: ${currentAttributes.nature} | Rarity: ${currentAttributes.rarity}`;
+            break;
+    }
+    
+    document.getElementById('attributesImage').innerText = imageAttributes;
+    document.getElementById('attributesText').innerText = textAttributes;
+}
+        
+        // Function to copy text to clipboard
+        function copyToClipboard(elementId) {
+            const text = document.getElementById(elementId).innerText;
+            navigator.clipboard.writeText(text).then(() => {
+                alert("Copied to clipboard!");
+            }, () => {
+                alert("Failed to copy. Please try again.");
+            });
+        }
+        
+	// Function to export attributes as JSON
+	function exportAsJSON(attributes) {
+	    // Convert attributes object to JSON string
+	    const jsonString = JSON.stringify(attributes, null, 2);
+    
+    // Create a blob with the JSON data
+    const blob = new Blob([jsonString], { type: 'application/json' });
+    
+    // Create a temporary URL for the blob
+    const url = window.URL.createObjectURL(blob);
+    
+    // Create a temporary link element
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${attributes.name.replace(/\s+/g, '_') || 'prompt'}_attributes.json`;
+    
+    // Programmatically click the link to trigger download
+    document.body.appendChild(link);
+    link.click();
+    
+    // Clean up
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+}
+
+
+        // Add event listener to generate button
+        document.getElementById('generateBtn').addEventListener('click', generatePrompts);
+
+// Add event listener for export button
+document.getElementById('exportJsonBtn').addEventListener('click', () => {
+    if (currentAttributes) {
+        exportAsJSON(currentAttributes);
+    } else {
+        alert('Please generate prompts first!');
+    }
+});
+        
+        // Generate initial prompts when page loads
+        window.onload = function() {
+            generatePrompts();
+            
+            // Set up toggle functionality for settings sections
+            document.getElementById('imageSettingsToggle').addEventListener('click', function() {
+                toggleSection('imageSettingsContent', this.querySelector('.toggle-icon'));
+            });
+            
+            document.getElementById('textSettingsToggle').addEventListener('click', function() {
+                toggleSection('textSettingsContent', this.querySelector('.toggle-icon'));
+            });
+            
+            // Set up theme toggle
+            const themeToggle = document.getElementById('themeToggle');
+            themeToggle.addEventListener('click', toggleTheme);
+            
+            // Check for saved theme preference
+            const savedTheme = localStorage.getItem('theme');
+            if (savedTheme) {
+                document.documentElement.setAttribute('data-theme', savedTheme);
+                updateThemeIcon(savedTheme);
+            }
+        };
+        
+        // Function to toggle section visibility
+        function toggleSection(contentId, iconElement) {
+            const content = document.getElementById(contentId);
+            
+            if (content.classList.contains('expanded')) {
+                content.classList.remove('expanded');
+                content.classList.add('collapsed');
+                iconElement.classList.add('collapsed');
+            } else {
+                content.classList.remove('collapsed');
+                content.classList.add('expanded');
+                iconElement.classList.remove('collapsed');
+            }
+        }
+        
+        // Function to toggle theme
+        function toggleTheme() {
+            const currentTheme = document.documentElement.getAttribute('data-theme');
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            
+            document.documentElement.setAttribute('data-theme', newTheme);
+            localStorage.setItem('theme', newTheme);
+            
+            updateThemeIcon(newTheme);
+        }
+        
+        // Function to update theme icon
+        function updateThemeIcon(theme) {
+            const themeIcon = document.querySelector('#themeToggle i');
+            if (theme === 'dark') {
+                themeIcon.className = 'fas fa-sun';
+            } else {
+                themeIcon.className = 'fas fa-moon';
+            }
+        }
+    </script>
+    
+    <!-- Separate script for image generation -->
+    <script src="imageGenerator.js"></script>
+    
+    <!-- Separate script for description generation -->
+    <script src="descriptionGenerator.js"></script>
+</body>
+</html>
