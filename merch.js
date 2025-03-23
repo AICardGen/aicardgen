@@ -223,11 +223,18 @@ function initializePayPalButton() {
                 };
                 
                 // Send order details to email
-                sendOrderToEmail(order);
-                
-                // Show success message and reset cart
-                document.getElementById('cartModal').style.display = 'none';
-                showOrderSuccessMessage('PayPal');
+                sendOrderToEmail(order).then(() => {
+                    // Hide cart modal
+                    document.getElementById('cartModal').style.display = 'none';
+                    
+                    // Show success message and reset cart
+                    showOrderSuccessMessage('PayPal');
+                    
+                    // Clear the cart
+                    cart = [];
+                    saveCart();
+                    updateCartBadge();
+                });
             });
         },
         
@@ -444,17 +451,86 @@ function addCustomToCart(style, size, color, imageUrl, price, designPosition) {
         if (itemAdded) return;
         itemAdded = true;
         
-        // Fallback: still add to cart but without the mockup
-        cart.push({
-            id: cartItemId,
-            style: style,
-            size: size,
-            color: color,
-            imageUrl: imageUrl,
-            price: price,
-            designPosition: designPosition,
-            addedAt: new Date().toISOString()
-        });
+        // Create a basic mockup using canvas
+        try {
+            // Create a simple canvas for a basic mockup
+            const simpleCanvas = document.createElement('canvas');
+            const simpleCtx = simpleCanvas.getContext('2d');
+            simpleCanvas.width = 600;
+            simpleCanvas.height = 600;
+            
+            // Set background color to match the t-shirt color
+            simpleCtx.fillStyle = color === 'black' ? '#121212' : 
+                                 color === 'white' ? '#f8f8f8' : 
+                                 color === 'gray' ? '#888888' : 
+                                 color === 'navy' ? '#1a2a5a' : 
+                                 color === 'red' ? '#c13030' : '#f8f8f8';
+            simpleCtx.fillRect(0, 0, simpleCanvas.width, simpleCanvas.height);
+            
+            // Draw a simple t-shirt outline
+            simpleCtx.strokeStyle = 'rgba(255,255,255,0.2)';
+            simpleCtx.lineWidth = 2;
+            
+            // T-shirt neck
+            simpleCtx.beginPath();
+            simpleCtx.moveTo(250, 150);
+            simpleCtx.quadraticCurveTo(300, 100, 350, 150);
+            simpleCtx.stroke();
+            
+            // T-shirt shoulders
+            simpleCtx.beginPath();
+            simpleCtx.moveTo(250, 150);
+            simpleCtx.lineTo(150, 200);
+            simpleCtx.moveTo(350, 150);
+            simpleCtx.lineTo(450, 200);
+            simpleCtx.stroke();
+            
+            // Add text indicating this is a mockup
+            simpleCtx.font = '16px Arial';
+            simpleCtx.fillStyle = color === 'black' ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)';
+            simpleCtx.textAlign = 'center';
+            simpleCtx.fillText(`Custom ${formatStyle(style)} T-shirt (${color.toUpperCase()})`, 300, 500);
+            
+            // Add text indicating design will be applied
+            simpleCtx.font = '14px Arial';
+            simpleCtx.fillText('Your design will be applied to this area', 300, 300);
+            
+            // Draw a placeholder for the design image (small version)
+            const placeholderWidth = 100;
+            const placeholderHeight = 100;
+            simpleCtx.strokeStyle = color === 'black' ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)';
+            simpleCtx.strokeRect(300 - placeholderWidth/2, 300 - placeholderHeight/2, placeholderWidth, placeholderHeight);
+            
+            // Create a data URL for the mockup
+            const mockupImageUrl = simpleCanvas.toDataURL('image/png');
+            
+            // Add the item to cart with both the design image and basic mockup
+            cart.push({
+                id: cartItemId,
+                style: style,
+                size: size,
+                color: color,
+                imageUrl: imageUrl,
+                previewImageUrl: mockupImageUrl, // Use our simple mockup
+                price: price,
+                designPosition: designPosition,
+                addedAt: new Date().toISOString()
+            });
+        } catch (error) {
+            console.error('Error creating simple mockup:', error);
+            // Ultimate fallback - just use the same image for both
+            cart.push({
+                id: cartItemId,
+                style: style,
+                size: size,
+                color: color,
+                imageUrl: imageUrl,
+                previewImageUrl: imageUrl, // Fallback to using the same image
+                price: price,
+                designPosition: designPosition,
+                addedAt: new Date().toISOString()
+            });
+        }
         
         saveCart();
         updateCartBadge();
@@ -1958,11 +2034,18 @@ function proceedToCheckout() {
                     };
                     
                     // Send order details to email
-                    sendOrderToEmail(order);
-                    
-                    // Show success message and reset cart
-                    document.getElementById('checkoutModal').remove();
-                    showOrderSuccessMessage('PayPal');
+                    sendOrderToEmail(order).then(() => {
+                        // Hide cart modal
+                        document.getElementById('cartModal').style.display = 'none';
+                        
+                        // Show success message and reset cart
+                        showOrderSuccessMessage('PayPal');
+                        
+                        // Clear the cart
+                        cart = [];
+                        saveCart();
+                        updateCartBadge();
+                    });
                 });
             },
             onError: function(err) {
@@ -2061,12 +2144,21 @@ function proceedToCheckout() {
                 paymentMethod: 'Credit Card'
             };
             
-            // Send order details to email
-            sendOrderToEmail(order);
-            
-            // Show success message and reset cart
-            document.getElementById('checkoutModal').remove();
-            showOrderSuccessMessage('Credit Card');
+            // Send order details to email and then show success message
+            sendOrderToEmail(order).then(() => {
+                // Only remove the modal if it still exists (it might have been removed in sendOrderToEmail)
+                if (document.getElementById('checkoutModal')) {
+                    document.getElementById('checkoutModal').remove();
+                }
+                
+                // Show success message and reset cart
+                showOrderSuccessMessage('Credit Card');
+                
+                // Clear the cart
+                cart = [];
+                saveCart();
+                updateCartBadge();
+            });
             
         }, 2000);
     });
@@ -2120,15 +2212,15 @@ function proceedToCheckout() {
 function sendOrderToEmail(order) {
     // Create a professional-looking order representation with the design images
     let orderHTML = `
-        <table>
-            <thead>
+        <table style="width:100%; border-collapse:collapse; margin-bottom:20px; border:1px solid #ddd;">
+            <thead style="background-color:#f5f5f5;">
                 <tr>
-                    <th>Item</th>
-                    <th>Size</th>
-                    <th>Color</th>
-                    <th>Price</th>
-                    <th>Design</th>
-                    <th>Mockup</th>
+                    <th style="padding:10px; border:1px solid #ddd;">Item</th>
+                    <th style="padding:10px; border:1px solid #ddd;">Size</th>
+                    <th style="padding:10px; border:1px solid #ddd;">Color</th>
+                    <th style="padding:10px; border:1px solid #ddd;">Price</th>
+                    <th style="padding:10px; border:1px solid #ddd;">Design</th>
+                    <th style="padding:10px; border:1px solid #ddd;">Mockup</th>
                 </tr>
             </thead>
             <tbody>
@@ -2136,17 +2228,23 @@ function sendOrderToEmail(order) {
     
     // Add each item to the email with improved styling
     order.items.forEach(item => {
+        // Get design position info in a readable format
+        const designInfo = item.designPosition ? `Position: ${Math.round(item.designPosition.x)}x${Math.round(item.designPosition.y)}, Scale: ${Math.round(item.designPosition.scale)}%, Rotation: ${Math.round(item.designPosition.rotation)}°` : 'Default position';
+        
         orderHTML += `
             <tr>
-                <td><strong>Custom ${formatStyle(item.style)} T-shirt</strong></td>
-                <td>${item.size}</td>
-                <td>${item.color}</td>
-                <td>$${parseFloat(item.price).toFixed(2)}</td>
-                <td>
-                    <img src="${item.imageUrl}" width="100" alt="Design" style="border-radius: 4px; border: 1px solid #eee;">
+                <td style="padding:10px; border:1px solid #ddd;"><strong>Custom ${formatStyle(item.style)} T-shirt</strong></td>
+                <td style="padding:10px; border:1px solid #ddd;">${item.size}</td>
+                <td style="padding:10px; border:1px solid #ddd;">${item.color}</td>
+                <td style="padding:10px; border:1px solid #ddd;">$${parseFloat(item.price).toFixed(2)}</td>
+                <td style="padding:10px; border:1px solid #ddd; text-align:center;">
+                    <div style="margin-bottom:5px;"><strong>Original Design</strong></div>
+                    <img src="${item.imageUrl}" width="150" alt="Design" style="border-radius:4px; border:1px solid #eee; display:block; margin:0 auto;">
+                    <div style="margin-top:5px; font-size:11px; color:#666;">${designInfo}</div>
                 </td>
-                <td>
-                    <img src="${item.previewImageUrl || item.imageUrl}" width="100" alt="T-shirt Mockup" style="border-radius: 4px; border: 1px solid #eee;">
+                <td style="padding:10px; border:1px solid #ddd; text-align:center;">
+                    <div style="margin-bottom:5px;"><strong>T-shirt Preview</strong></div>
+                    <img src="${item.previewImageUrl}" width="150" alt="T-shirt Mockup" style="border-radius:4px; border:1px solid #eee; display:block; margin:0 auto;">
                 </td>
             </tr>
         `;
@@ -2155,13 +2253,16 @@ function sendOrderToEmail(order) {
     // Add order total row
     orderHTML += `
             </tbody>
-            <tfoot>
-                <tr class="total-row">
-                    <td colspan="3" style="text-align: right;"><strong>Order Total:</strong></td>
-                    <td colspan="3"><strong>$${order.total.toFixed(2)}</strong></td>
+            <tfoot style="background-color:#f9f9f9;">
+                <tr>
+                    <td colspan="3" style="padding:10px; border:1px solid #ddd; text-align:right;"><strong>Order Total:</strong></td>
+                    <td colspan="3" style="padding:10px; border:1px solid #ddd;"><strong>$${order.total.toFixed(2)}</strong></td>
                 </tr>
             </tfoot>
         </table>
+        <div style="font-size:12px; color:#666; margin-top:10px; margin-bottom:20px;">
+            Note: The T-shirt mockup shows an approximation of how your design will appear on the shirt. The actual product may vary slightly.
+        </div>
     `;
     
     // Create loading overlay while email is sent
@@ -2193,14 +2294,16 @@ function sendOrderToEmail(order) {
     const customerTemplateParams = {
         // Standard EmailJS email parameters
         to_name: order.customer.name,
-        email: order.customer.email, // Changed from to_email to email to match template
+        email: order.customer.email,
         from_name: 'AI Card Generator',
         from_email: 'no-reply@aicardgen.com',
         reply_to: 'aicardgen_business@outlook.com',
         subject: `Your Order #${order.id} Confirmation`,
         
-        // Template content variables
-        message: customerMessage + orderHTML,
+        // Split content into separate parameters to avoid HTML rendering issues
+        greeting_message: "Thank you for your order! We've received your payment and are processing your custom merchandise.",
+        shipping_message: "Your items will be shipped to the address provided. If you have any questions, please contact us at aicardgen_business@outlook.com",
+        order_items_html: encodeURIComponent(orderHTML), // Encode HTML to prevent rendering issues
         order_id: order.id,
         order_date: new Date(order.date).toLocaleString(),
         customer_name: order.customer.name,
@@ -2214,14 +2317,16 @@ function sendOrderToEmail(order) {
     const businessTemplateParams = {
         // Standard EmailJS email parameters
         to_name: 'Merchandise Team',
-        email: 'aicardgen_business@outlook.com', // Changed from to_email to email to match template
+        email: 'aicardgen_business@outlook.com',
         from_name: 'AI Card Generator Shop',
         from_email: 'no-reply@aicardgen.com',
         reply_to: order.customer.email,
         subject: `New Order #${order.id} Received`,
         
-        // Template content variables
-        message: businessMessage + orderHTML,
+        // Split content into separate parameters to avoid HTML rendering issues
+        greeting_message: "A new order has been received and requires processing.",
+        shipping_message: "Please review the order details below and prepare for shipping.",
+        order_items_html: encodeURIComponent(orderHTML), // Encode HTML to prevent rendering issues
         order_id: order.id,
         order_date: new Date(order.date).toLocaleString(),
         customer_name: order.customer.name,
@@ -2234,38 +2339,40 @@ function sendOrderToEmail(order) {
     console.log('Sending customer email with parameters:', customerTemplateParams);
     console.log('Sending business email with parameters:', businessTemplateParams);
     
-    // Send the customer receipt email
-    emailjs.send('service_fcsd7gr', 'template_pchevsq', customerTemplateParams)
-        .then(function(response) {
-            console.log('Customer email successfully sent!', response);
-            
-            // Then send the business notification email
-            emailjs.send('service_fcsd7gr', 'template_pchevsq', businessTemplateParams)
-                .then(function(response) {
-                    console.log('Business email successfully sent!', response);
-                    if (checkoutModal) {
-                        checkoutModal.remove();
-                    }
-                    showOrderSuccessMessage(order.paymentMethod);
-                }, function(error) {
-                    console.error('Business email sending failed:', error);
-                    // Still show success to customer
-                    if (checkoutModal) {
-                        checkoutModal.remove();
-                    }
-                    showOrderSuccessMessage(order.paymentMethod);
-                });
+    // Return a promise that resolves when both emails have been sent
+    return new Promise((resolve, reject) => {
+        // Send the customer receipt email
+        emailjs.send('service_fcsd7gr', 'template_pchevsq', customerTemplateParams)
+            .then(function(response) {
+                console.log('Customer email successfully sent!', response);
                 
-        }, function(error) {
-            console.error('Customer email sending failed:', error);
-            // Still show success to customer, but log the error
-            if (checkoutModal) {
-                checkoutModal.remove();
-            }
-            showOrderSuccessMessage(order.paymentMethod);
-            // Show a notification about the email error
-            showToast('Your order was processed, but there was an issue sending the order confirmation. Our team has been notified.', 'warning');
-        });
+                // Then send the business notification email
+                emailjs.send('service_fcsd7gr', 'template_pchevsq', businessTemplateParams)
+                    .then(function(response) {
+                        console.log('Business email successfully sent!', response);
+                        if (checkoutModal) {
+                            checkoutModal.remove();
+                        }
+                        resolve(true); // Both emails sent successfully
+                    }, function(error) {
+                        console.error('Business email sending failed:', error);
+                        // Still continue even if business email fails
+                        if (checkoutModal) {
+                            checkoutModal.remove();
+                        }
+                        resolve(true);
+                    });
+                    
+            }, function(error) {
+                console.error('Customer email sending failed:', error);
+                // Log the error but still let order complete
+                if (checkoutModal) {
+                    checkoutModal.remove();
+                }
+                showToast('Your order was processed, but there was an issue sending the order confirmation. Our team has been notified.', 'warning');
+                resolve(false);
+            });
+    });
 }
 
 // Show order success message
@@ -3201,73 +3308,99 @@ function createMockupCanvas(style, color) {
 
 // Add a function to test EmailJS at the end of the file
 function testEmailJSSetup() {
-    // Test data with realistic values
-    const testOrder = {
-        id: 'TEST-' + Date.now().toString().slice(-6),
-        date: new Date().toISOString(),
-        customer: {
-            name: 'Test Customer',
-            email: 'aicardgen_business@outlook.com', // The business email will receive the test
-            address: '123 Test Street, Test City, 12345'
-        },
-        items: [
-            {
-                style: 'regular',
-                size: 'M',
-                color: 'black',
-                price: 29.99,
-                imageUrl: 'https://placehold.co/400x400/e0d8f0/4a2c82?text=Test+Design',
-                previewImageUrl: 'https://placehold.co/400x400/121212/e0d8f0?text=Mockup'
-            },
-            {
-                style: 'longsleeve',
-                size: 'L',
-                color: 'black',
-                price: 34.99,
-                imageUrl: 'https://placehold.co/400x400/e0d8f0/4a2c82?text=Design+2',
-                previewImageUrl: 'https://placehold.co/400x400/121212/e0d8f0?text=Mockup+2'
-            }
-        ],
-        total: 64.98,
-        paymentMethod: 'Credit Card'
-    };
+    console.log("Testing EmailJS setup...");
     
-    // Show toast to indicate test is running
-    showToast('Testing EmailJS setup with professional template...', 'info');
+    // Create a realistic test HTML that shows both design and mockup
+    const testHTML = `
+        <table style="width:100%; border-collapse:collapse; margin-bottom:20px; border:1px solid #ddd;">
+            <thead style="background-color:#f5f5f5;">
+                <tr>
+                    <th style="padding:10px; border:1px solid #ddd;">Item</th>
+                    <th style="padding:10px; border:1px solid #ddd;">Size</th>
+                    <th style="padding:10px; border:1px solid #ddd;">Color</th>
+                    <th style="padding:10px; border:1px solid #ddd;">Price</th>
+                    <th style="padding:10px; border:1px solid #ddd;">Design</th>
+                    <th style="padding:10px; border:1px solid #ddd;">Mockup</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td style="padding:10px; border:1px solid #ddd;"><strong>Custom Regular T-shirt</strong></td>
+                    <td style="padding:10px; border:1px solid #ddd;">M</td>
+                    <td style="padding:10px; border:1px solid #ddd;">Black</td>
+                    <td style="padding:10px; border:1px solid #ddd;">$29.99</td>
+                    <td style="padding:10px; border:1px solid #ddd; text-align:center;">
+                        <div style="margin-bottom:5px;"><strong>Original Design</strong></div>
+                        <img src="https://placehold.co/300x300/e0d8f0/4a2c82?text=Test+Design" width="150" alt="Design" style="border-radius:4px; border:1px solid #eee; display:block; margin:0 auto;">
+                    </td>
+                    <td style="padding:10px; border:1px solid #ddd; text-align:center;">
+                        <div style="margin-bottom:5px;"><strong>T-shirt Preview</strong></div>
+                        <img src="https://placehold.co/300x300/121212/e0d8f0?text=Mockup" width="150" alt="T-shirt Mockup" style="border-radius:4px; border:1px solid #eee; display:block; margin:0 auto;">
+                    </td>
+                </tr>
+            </tbody>
+            <tfoot style="background-color:#f9f9f9;">
+                <tr>
+                    <td colspan="3" style="padding:10px; border:1px solid #ddd; text-align:right;"><strong>Order Total:</strong></td>
+                    <td colspan="3" style="padding:10px; border:1px solid #ddd;"><strong>$29.99</strong></td>
+                </tr>
+            </tfoot>
+        </table>
+        <div style="font-size:12px; color:#666; margin-top:10px; margin-bottom:20px;">
+            Note: The T-shirt mockup shows an approximation of how your design will appear on the shirt. The actual product may vary slightly.
+        </div>
+    `;
     
-    // Direct EmailJS test with explicit parameters
-    const templateParams = {
-        // Standard EmailJS email parameters
-        to_name: 'Test Customer',
-        to_email: 'test@example.com', // Primary recipient (would be the customer's email)
-        cc_email: 'aicardgen_business@outlook.com', // CC to business email
-        from_name: 'AI Card Generator',
-        from_email: 'no-reply@aicardgen.com',
-        reply_to: 'aicardgen_business@outlook.com',
-        subject: `Test Order #TEST-${Date.now().toString().slice(-6)}`,
+    const testParams = {
+        to_name: "Test User",
+        email: "aicardgen_business@outlook.com", // Use your business email for testing
+        from_name: "AI Card Generator Test",
+        from_email: "no-reply@aicardgen.com",
+        reply_to: "aicardgen_business@outlook.com",
+        subject: "Test Email with HTML Rendering",
         
-        // Order specific content
-        message: 'This is a test email to verify the EmailJS integration is working correctly.',
-        order_id: `TEST-${Date.now().toString().slice(-6)}`,
+        // Split content into separate parameters
+        greeting_message: "This is a test email to check HTML rendering of T-shirt orders.",
+        shipping_message: "Below is a sample of how your order will appear in confirmation emails.",
+        order_items_html: encodeURIComponent(testHTML),
+        order_id: "TEST-" + Date.now().toString().slice(-6),
         order_date: new Date().toLocaleString(),
-        customer_name: 'Test Customer',
-        customer_email: 'test@example.com',
-        customer_address: '123 Test Street, Test City, 12345',
-        payment_method: 'Test Payment',
-        order_total: '64.98'
+        customer_name: "Test Customer",
+        customer_email: "test@example.com",
+        customer_address: "123 Test St, Test City",
+        payment_method: "Test Payment",
+        order_total: "29.99"
     };
     
-    console.log('Sending test email with parameters:', templateParams);
+    console.log("Sending test email with parameters:", testParams);
     
-    // Send the test email directly
-    emailjs.send('service_fcsd7gr', 'template_pchevsq', templateParams)
+    // Add a loading indicator
+    const loadingToast = showToast('Sending test email...', 'info', 0);
+    
+    emailjs.send('service_fcsd7gr', 'template_pchevsq', testParams)
         .then(function(response) {
             console.log('Test email successfully sent!', response);
-            showToast('Test email sent successfully!', 'success');
+            // Remove the loading toast
+            if (loadingToast) {
+                loadingToast.remove();
+            }
+            showToast('Test email sent successfully. Please check your inbox.', 'success');
         }, function(error) {
             console.error('Test email sending failed:', error);
-            showToast('Test email failed to send. Check console for details.', 'error');
+            // Remove the loading toast
+            if (loadingToast) {
+                loadingToast.remove();
+            }
+            showToast('Test email failed to send. Error: ' + (error.text || error.message || 'Unknown error'), 'error');
         });
+}
+
+function decodeOrderHTML() {
+    // This is a helper function you can add to your EmailJS template
+    // Create a script tag with this function in your EmailJS template
+    const encoded = document.getElementById('encoded-html').textContent;
+    const decoded = decodeURIComponent(encoded);
+    document.getElementById('order-table-container').innerHTML = decoded;
 }
 
 // Uncomment the line below to run the test when the page loads

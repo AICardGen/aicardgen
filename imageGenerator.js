@@ -81,7 +81,6 @@ document.addEventListener('DOMContentLoaded', function() {
             // Add notification about automatic merch save
             const merchNotification = document.createElement('div');
             merchNotification.className = 'merch-notification';
-            merchNotification.innerHTML = '<i class="fas fa-check-circle" style="color: var(--success); margin-right: 0.5rem;"></i> Image automatically saved to <a href="merch.html" style="color: var(--primary); font-weight: 600;">Merchandise</a>';
             merchNotification.style.marginTop = '1rem';
             merchNotification.style.textAlign = 'center';
             merchNotification.style.padding = '0.75rem';
