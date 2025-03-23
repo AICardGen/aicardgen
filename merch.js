@@ -2119,12 +2119,13 @@ function sendOrderToEmail(order) {
     // EmailJS requires specific parameter names for the recipient address 
     const templateParams = {
         // Standard EmailJS email parameters
-        to_name: 'Merchandise Team',
-        to_email: 'aicardgen_business@outlook.com',
-        from_name: order.customer.name,
-        from_email: order.customer.email,
-        reply_to: order.customer.email,
-        subject: `New Order #${order.id}`,
+        to_name: order.customer.name,
+        to_email: order.customer.email, // Send to customer instead of business email
+        cc_email: 'aicardgen_business@outlook.com', // CC to business email
+        from_name: 'AI Card Generator',
+        from_email: 'no-reply@aicardgen.com',
+        reply_to: 'aicardgen_business@outlook.com',
+        subject: `Your Order #${order.id} Confirmation`,
         
         // Template content variables
         message: orderHTML,
@@ -2899,11 +2900,12 @@ function testEmailJSSetup() {
     // Direct EmailJS test with explicit parameters
     const templateParams = {
         // Standard EmailJS email parameters
-        to_name: 'Merchandise Team',
-        to_email: 'aicardgen_business@outlook.com', 
-        from_name: 'Test Customer',
-        from_email: 'test@example.com',
-        reply_to: 'test@example.com',
+        to_name: 'Test Customer',
+        to_email: 'test@example.com', // Primary recipient (would be the customer's email)
+        cc_email: 'aicardgen_business@outlook.com', // CC to business email
+        from_name: 'AI Card Generator',
+        from_email: 'no-reply@aicardgen.com',
+        reply_to: 'aicardgen_business@outlook.com',
         subject: `Test Order #TEST-${Date.now().toString().slice(-6)}`,
         
         // Order specific content
