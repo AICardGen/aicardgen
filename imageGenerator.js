@@ -81,12 +81,28 @@ document.addEventListener('DOMContentLoaded', function() {
             // Add notification about automatic merch save
             const merchNotification = document.createElement('div');
             merchNotification.className = 'merch-notification';
-            merchNotification.style.marginTop = '1rem';
+            
+            merchNotification.innerHTML = `
+                <div style="display: flex; align-items: center; justify-content: center;">
+                    <i class="fas fa-check-circle" style="color: var(--success); font-size: 1.1rem; margin-right: 0.8rem;"></i>
+                    <span>Image automatically saved to <a href="merch.html" style="color: var(--primary); font-weight: 600; text-decoration: none; transition: all 0.2s ease;">Merchandise</a></span>
+                </div>
+            `;
+            
+            // Apply enhanced styling to make it match the rest of the UI
+            merchNotification.style.marginTop = '1.25rem';
             merchNotification.style.textAlign = 'center';
-            merchNotification.style.padding = '0.75rem';
-            merchNotification.style.backgroundColor = 'var(--secondary)';
-            merchNotification.style.borderRadius = '6px';
+            merchNotification.style.padding = '0.85rem 1rem';
+            merchNotification.style.backgroundColor = 'var(--card-bg, white)';
+            merchNotification.style.color = 'var(--text, #333)';
+            merchNotification.style.borderRadius = '8px';
             merchNotification.style.fontSize = '0.95rem';
+            merchNotification.style.fontWeight = '500';
+            merchNotification.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.08)';
+            merchNotification.style.border = '1px solid var(--border, #e0d8f0)';
+            merchNotification.style.transition = 'all 0.3s ease';
+            
+            // Add notification after the image
             imagePreview.appendChild(merchNotification);
         }
         
@@ -235,6 +251,29 @@ document.addEventListener('DOMContentLoaded', function() {
             alert('Please generate prompts first!');
             return;
         }
+
+        // Check if API keys are set based on the current service
+        if (currentApiService === 'together') {
+            const apiKey = localStorage.getItem('togetherApiKey');
+            if (!apiKey) {
+                alert('Please enter and apply your Together.ai API key first.');
+                togetherApiKeyInput.focus();
+                return;
+            }
+        } else { // AI Horde
+            const apiKey = localStorage.getItem('aiHordeApiKey');
+            if (!apiKey) {
+                alert('Please enter and apply your AI Horde API key first.');
+                aiHordeApiKeyInput.focus();
+                return;
+            }
+            // Also check for model selection
+            const selectedModel = localStorage.getItem('aiHordeModel');
+            if (!selectedModel) {
+                alert('Please select an AI Horde model first.');
+                return;
+            }
+        }
         
         // Check if NSFW is enabled and modify prompt accordingly
         let finalPrompt = imagePrompt;
@@ -245,6 +284,42 @@ document.addEventListener('DOMContentLoaded', function() {
         // Show loading state
         generateImageBtn.disabled = true;
         generateImageBtn.textContent = 'Generating...';
+        
+        // Show immediate visual feedback in the image preview area
+        const imagePreview = document.getElementById('imagePreview');
+        if (imagePreview) {
+            // Clear previous content
+            imagePreview.innerHTML = '';
+            
+            // Create a loading container with prominent styling
+            const loadingContainer = document.createElement('div');
+            loadingContainer.style.padding = '25px';
+            loadingContainer.style.textAlign = 'center';
+            loadingContainer.style.backgroundColor = 'var(--secondary, #f9f7ff)';
+            loadingContainer.style.borderRadius = '8px';
+            loadingContainer.style.marginBottom = '16px';
+            loadingContainer.style.border = '1px solid var(--primary, #4a2c82)';
+            loadingContainer.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.1)';
+            
+            // Create an animated icon and text
+            loadingContainer.innerHTML = `
+                <div style="margin-bottom: 15px;">
+                    <i class="fas fa-cog fa-spin" style="font-size: 2.5rem; color: var(--primary); margin-bottom: 15px;"></i>
+                    <div style="font-weight: 600; font-size: 1.2rem; margin: 10px 0;">Generating Image...</div>
+                </div>
+                <div class="progress-bar-container" style="height: 12px; background-color: rgba(0,0,0,0.1); border-radius: 6px; overflow: hidden; margin: 15px auto; width: 85%;">
+                    <div class="progress-bar" style="height: 100%; width: 5%; background-color: var(--primary); border-radius: 6px; transition: width 0.5s ease-in-out;"></div>
+                </div>
+                <div style="font-size: 1rem; color: var(--text-light); margin-top: 10px;">This may take up to a minute...</div>
+            `;
+            
+            // Make the image preview visible
+            imagePreview.style.display = 'block';
+            imagePreview.appendChild(loadingContainer);
+            
+            // Scroll to make the loading indicator visible
+            imagePreview.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
         
         try {
             if (currentApiService === 'together') {
@@ -266,36 +341,41 @@ document.addEventListener('DOMContentLoaded', function() {
     async function generateWithTogether(prompt) {
         // Get API key from localStorage
         const apiKey = localStorage.getItem('togetherApiKey');
-        if (!apiKey) {
-            alert('Please enter and apply your Together.ai API key first.');
-            togetherApiKeyInput.focus();
-            throw new Error('No API key provided');
-        }
         
-        // API call options
+        // Update the progress bar to show the request is being initiated
+        updateProgressBar(10, 'Generating Image...');
+        
+        // Build the request
         const requestOptions = {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${apiKey}`,
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}`
             },
             body: JSON.stringify({
                 model: 'stabilityai/stable-diffusion-xl-base-1.0',
                 prompt: prompt,
-                negative_prompt: 'blurry, distorted, low quality, pixelated',
-                width: 512,
-                height: 512,
-                steps: 20,
-                seed: Math.floor(Math.random() * 2147483647),
-                scheduler: 'K_EULER'
+                negative_prompt: 'blurry, low quality, text, watermark, logo',
+                height: 1024,
+                width: 1024,
+                steps: 25
             })
         };
         
+        // Update progress to indicate request is being sent
+        updateProgressBar(20, 'Generating Image...');
+        
+        // Create a progress simulation for the Together API (which doesn't provide progress updates)
+        const progressInterval = startProgressSimulation();
+        
         // Make API call
         try {
+            updateProgressBar(30, 'Generating Image...');
+            
             const response = await fetch('https://api.together.xyz/inference', requestOptions);
             
             if (!response.ok) {
+                clearInterval(progressInterval);
                 if (response.status === 401) {
                     throw new Error('Invalid API key. Please check your Together.ai API key and try again.');
                 } else {
@@ -303,21 +383,87 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
             
+            updateProgressBar(80, 'Generating Image...');
+            
             const data = await response.json();
             
             if (!data.output || !data.output.data) {
+                clearInterval(progressInterval);
                 throw new Error('No image data returned from API');
             }
             
+            // Set progress to 100% before displaying the image
+            updateProgressBar(100, 'Image Complete!');
+            
+            // Clear the interval once the image is ready
+            clearInterval(progressInterval);
+            
             // Display the generated image
-            displayGeneratedImage(data.output.data);
+            setTimeout(() => {
+                displayGeneratedImage(data.output.data);
+            }, 500); // Short delay to show the completed progress bar
             
             console.log('Image generated successfully with Together.ai');
         } catch (error) {
+            clearInterval(progressInterval);
             console.error('Error generating image with Together.ai:', error);
             alert('Failed to generate image: ' + error.message);
             throw error;
         }
+    }
+    
+    // Helper function to update the progress bar
+    function updateProgressBar(percentage, message = null) {
+        const imagePreview = document.getElementById('imagePreview');
+        if (!imagePreview) return;
+        
+        const progressBar = imagePreview.querySelector('.progress-bar');
+        if (progressBar) {
+            // Ensure we have a valid percentage value
+            const safePercentage = isNaN(percentage) ? 0 : percentage;
+            progressBar.style.width = `${safePercentage}%`;
+            
+            // Update the message if provided
+            if (message) {
+                const loadingText = imagePreview.querySelector('div[style*="font-weight: 600"]');
+                if (loadingText) {
+                    loadingText.textContent = message;
+                }
+            }
+        }
+    }
+    
+    // Helper function to simulate progress for APIs without progress updates
+    function startProgressSimulation() {
+        let progress = 30; // Starting progress after initial setup
+        
+        // Simulate gradual progress increases
+        return setInterval(() => {
+            // Increment progress by a small random amount
+            if (progress < 80) { // Cap at 80% for final processing
+                // Slower at the beginning, faster in the middle, slower towards the end
+                const increment = progress < 50 ? 
+                    Math.random() * 3 : // Slower at start
+                    (progress < 70 ? Math.random() * 1.5 : Math.random() * 0.8); // Faster in middle, slower at end
+                
+                progress += increment;
+                
+                const messages = [
+                    "Generating Image...",
+                    "Creating artwork...",
+                    "Painting your masterpiece...",
+                    "Adding details...",
+                    "Processing the image...",
+                    "Almost there..."
+                ];
+                
+                // Update progress bar without showing percentage
+                updateProgressBar(
+                    Math.min(Math.round(progress), 80),
+                    messages[Math.floor((progress / 80) * messages.length)]
+                );
+            }
+        }, 800);
     }
     
     // Function to display a generated image safely
@@ -373,13 +519,26 @@ document.addEventListener('DOMContentLoaded', function() {
             // Add notification text about automatic merch save
             const merchNotification = document.createElement('div');
             merchNotification.className = 'merch-notification';
-            merchNotification.innerHTML = '<i class="fas fa-check-circle" style="color: var(--success); margin-right: 0.5rem;"></i> Image automatically saved to <a href="merch.html" style="color: var(--primary); font-weight: 600;">Merchandise</a>';
-            merchNotification.style.marginTop = '1rem';
+            
+            merchNotification.innerHTML = `
+                <div style="display: flex; align-items: center; justify-content: center;">
+                    <i class="fas fa-check-circle" style="color: var(--success); font-size: 1.1rem; margin-right: 0.8rem;"></i>
+                    <span>Image automatically saved to <a href="merch.html" style="color: var(--primary); font-weight: 600; text-decoration: none; transition: all 0.2s ease;">Merchandise</a></span>
+                </div>
+            `;
+            
+            // Apply enhanced styling to make it match the rest of the UI
+            merchNotification.style.marginTop = '1.25rem';
             merchNotification.style.textAlign = 'center';
-            merchNotification.style.padding = '0.75rem';
-            merchNotification.style.backgroundColor = 'var(--secondary)';
-            merchNotification.style.borderRadius = '6px';
+            merchNotification.style.padding = '0.85rem 1rem';
+            merchNotification.style.backgroundColor = 'var(--card-bg, white)';
+            merchNotification.style.color = 'var(--text, #333)';
+            merchNotification.style.borderRadius = '8px';
             merchNotification.style.fontSize = '0.95rem';
+            merchNotification.style.fontWeight = '500';
+            merchNotification.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.08)';
+            merchNotification.style.border = '1px solid var(--border, #e0d8f0)';
+            merchNotification.style.transition = 'all 0.3s ease';
             
             // Add notification after the image
             imagePreview.appendChild(merchNotification);
@@ -410,27 +569,54 @@ document.addEventListener('DOMContentLoaded', function() {
         loadingPlaceholder.style.backgroundColor = 'var(--secondary, #f9f7ff)';
         loadingPlaceholder.style.borderRadius = '8px';
         loadingPlaceholder.style.marginBottom = '16px';
-        loadingPlaceholder.innerHTML = '<i class="fas fa-spinner fa-spin" style="margin-right: 8px;"></i> Loading image...';
+        
+        // Create a more visually appealing loading indicator
+        loadingPlaceholder.innerHTML = `
+            <div style="margin-bottom: 15px;">
+                <i class="fas fa-spinner fa-spin" style="font-size: 1.8rem; color: var(--primary); margin-bottom: 10px;"></i>
+                <div style="font-weight: 600; margin: 5px 0;">Generating Image...</div>
+            </div>
+            <div class="progress-bar-container" style="height: 10px; background-color: rgba(0,0,0,0.1); border-radius: 5px; overflow: hidden; margin: 10px auto; width: 80%;">
+                <div class="progress-bar" style="height: 100%; width: 0%; background-color: var(--primary); border-radius: 5px; transition: width 0.3s ease-in-out;"></div>
+            </div>
+            <div style="font-size: 0.9rem; color: var(--text-light);">Please wait...</div>
+        `;
         
         imagePreview.appendChild(loadingPlaceholder);
+        
+        // Start the loading animation
+        let loadingProgress = 0;
+        const progressBar = loadingPlaceholder.querySelector('.progress-bar');
+        
+        // Simulate progress until image loads
+        const loadingInterval = setInterval(() => {
+            // Gradually increase progress but never reach 100% until image loads
+            if (loadingProgress < 90) {
+                loadingProgress += Math.random() * 5;
+                if (loadingProgress > 90) loadingProgress = 90;
+                
+                // Ensure we don't display NaN
+                const safeProgress = isNaN(loadingProgress) ? 0 : loadingProgress;
+                progressBar.style.width = `${safeProgress}%`;
+            }
+        }, 300);
+        
+        // When image loads, clear the interval and remove loading placeholder
+        img.addEventListener('load', () => {
+            clearInterval(loadingInterval);
+            if (imagePreview.contains(loadingPlaceholder)) {
+                imagePreview.removeChild(loadingPlaceholder);
+            }
+        });
     }
     
     // Function to generate image with AI Horde
     async function generateWithAiHorde(prompt) {
         // Get API key from localStorage
         const apiKey = localStorage.getItem('aiHordeApiKey');
-        if (!apiKey) {
-            alert('Please enter and apply your AI Horde API key first.');
-            aiHordeApiKeyInput.focus();
-            throw new Error('No API key provided');
-        }
-        
         // Get selected model
         const selectedModel = localStorage.getItem('aiHordeModel');
-        if (!selectedModel) {
-            alert('Please select an AI Horde model first.');
-            throw new Error('No model selected');
-        }
+        // We now check for API key and model existence in the main generateImage function
         
         try {
             // Step 1: Submit the generation request
@@ -517,7 +703,56 @@ document.addEventListener('DOMContentLoaded', function() {
                 const checkData = await checkResponse.json();
                 
                 // Update button text with progress
-                generateImageBtn.textContent = `Generating... (${checkData.done ? 100 : Math.round(checkData.progress * 100)}%)`;
+                const progressValue = checkData.progress || 0;
+                const progressPercent = checkData.done ? 100 : Math.round(progressValue * 100);
+                
+                // Display a professional message even when percentage is unknown
+                if (isNaN(progressPercent)) {
+                    generateImageBtn.textContent = 'Initializing...';
+                } else {
+                    generateImageBtn.textContent = 'Generating Image...';
+                }
+                
+                // Update the progress bar in the image preview if it exists
+                const loadingPlaceholder = imagePreview.querySelector('.progress-bar-container');
+                if (loadingPlaceholder) {
+                    const progressBar = loadingPlaceholder.querySelector('.progress-bar');
+                    if (progressBar) {
+                        progressBar.style.width = `${progressPercent}%`;
+                        
+                        // Update the loading text to show a simple message without percentage
+                        const loadingText = imagePreview.querySelector('div[style*="font-weight: 600"]');
+                        if (loadingText) {
+                            // Use status message when percentage is unknown
+                            if (isNaN(progressPercent)) {
+                                loadingText.textContent = 'Initializing...';
+                            } else {
+                                loadingText.textContent = 'Generating Image...';
+                            }
+                        }
+                        
+                        // Add a pulsing effect to make the loading more noticeable
+                        if (!progressBar.classList.contains('pulse-effect') && progressPercent < 100) {
+                            progressBar.classList.add('pulse-effect');
+                            // Add the pulse animation style if it doesn't exist
+                            if (!document.getElementById('pulse-animation-style')) {
+                                const style = document.createElement('style');
+                                style.id = 'pulse-animation-style';
+                                style.textContent = `
+                                    @keyframes pulse {
+                                        0% { opacity: 0.7; }
+                                        50% { opacity: 1; }
+                                        100% { opacity: 0.7; }
+                                    }
+                                    .pulse-effect {
+                                        animation: pulse 1.5s infinite ease-in-out;
+                                    }
+                                `;
+                                document.head.appendChild(style);
+                            }
+                        }
+                    }
+                }
                 
                 if (checkData.done) {
                     // Get the result

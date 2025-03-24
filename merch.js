@@ -352,7 +352,18 @@ function renderPayPalButton() {
                     // Close cart modal
                     document.getElementById('cartModal').style.display = 'none';
                     
-                    // Create order data
+                    // Extract shipping address if available
+                    let shippingAddress = 'Not provided';
+                    if (orderData.purchase_units && 
+                        orderData.purchase_units[0] && 
+                        orderData.purchase_units[0].shipping && 
+                        orderData.purchase_units[0].shipping.address) {
+                        
+                        const addr = orderData.purchase_units[0].shipping.address;
+                        shippingAddress = `${addr.address_line_1 || ''} ${addr.address_line_2 || ''}, ${addr.admin_area_2 || ''}, ${addr.admin_area_1 || ''}, ${addr.postal_code || ''}, ${addr.country_code || ''}`.trim();
+                    }
+                    
+                    // Create order data with proper customer structure
                     const orderDetails = {
                         paypal: {
                             orderId: data.orderID,
@@ -363,8 +374,13 @@ function renderPayPalButton() {
                         items: cart,
                         total: total,
                         date: new Date().toISOString(),
-                        customerEmail: orderData.payer.email_address,
-                        customerName: `${orderData.payer.name.given_name} ${orderData.payer.name.surname}`
+                        paymentMethod: 'PayPal',
+                        customer: {
+                            name: `${orderData.payer.name.given_name} ${orderData.payer.name.surname}`,
+                            email: orderData.payer.email_address,
+                            address: shippingAddress,
+                            paypalOrderId: data.orderID
+                        }
                     };
                     
                     // Save order to localStorage for reference
@@ -521,6 +537,7 @@ function addCustomToCart(style, size, color, imageUrl, price, designPosition) {
                     // Create a complete mockup with t-shirt and design
                     // This simulates what the user sees on screen
                     const baseImg = new Image();
+                    baseImg.crossOrigin = 'Anonymous';  // Add this to prevent canvas tainting
                     baseImg.onload = function() {
                         // Only proceed if item hasn't been added yet
                         if (itemAdded) return;
@@ -529,62 +546,91 @@ function addCustomToCart(style, size, color, imageUrl, price, designPosition) {
                         // Draw the t-shirt base
                         mockupCtx.drawImage(baseImg, 0, 0, mockupCanvas.width, mockupCanvas.height);
                         
-                        // Apply the design with proper positioning
-                        const designX = (mockupCanvas.width / 2) + designPosition.x;
-                        const designY = (mockupCanvas.height / 2) + designPosition.y;
-                        
-                        mockupCtx.save();
-                        mockupCtx.translate(designX, designY);
-                        mockupCtx.rotate(designPosition.rotation * Math.PI / 180);
-                        mockupCtx.scale(designPosition.scale / 100, designPosition.scale / 100);
-                        mockupCtx.globalAlpha = designPosition.transparency / 100;
-                        
-                        // Calculate dimensions to center the design
-                        const dWidth = img.width;
-                        const dHeight = img.height;
-                        mockupCtx.drawImage(img, -dWidth / 2, -dHeight / 2, dWidth, dHeight);
-                        
-                        mockupCtx.restore();
-                        
-                        // Convert to dataURL to save the mockup
-                        const mockupImageUrl = mockupCanvas.toDataURL('image/png');
-                        
-                        // Add the item to the cart with both original image and mockup
-                        cart.push({
-                            id: cartItemId,
-                            style: style,
-                            size: size,
-                            color: color,
-                            imageUrl: imageUrl,
-                            previewImageUrl: mockupImageUrl, // Save the complete mockup
-                            price: price,
-                            designPosition: {
-                                x: designPosition.x,
-                                y: designPosition.y,
-                                scale: designPosition.scale,
-                                rotation: designPosition.rotation,
-                                fade: designPosition.fade,
-                                transparency: designPosition.transparency
-                            },
-                            addedAt: new Date().toISOString()
-                        });
-                        
-                        saveCart();
-                        updateCartBadge();
-                        
-                        // Show satisfying animation before confirmation message
-                        showAddToCartAnimation(mockupImageUrl);
+                        try {
+                            // Apply the design with proper positioning
+                            const designX = (mockupCanvas.width / 2) + designPosition.x;
+                            const designY = (mockupCanvas.height / 2) + designPosition.y;
+                            
+                            mockupCtx.save();
+                            mockupCtx.translate(designX, designY);
+                            mockupCtx.rotate(designPosition.rotation * Math.PI / 180);
+                            mockupCtx.scale(designPosition.scale / 100, designPosition.scale / 100);
+                            mockupCtx.globalAlpha = designPosition.transparency / 100;
+                            
+                            // Calculate dimensions to center the design
+                            const dWidth = img.width;
+                            const dHeight = img.height;
+                            mockupCtx.drawImage(img, -dWidth / 2, -dHeight / 2, dWidth, dHeight);
+                            
+                            mockupCtx.restore();
+                            
+                            // Convert to dataURL to save the mockup
+                            const mockupImageUrl = mockupCanvas.toDataURL('image/png');
+                            
+                            // Add the item to the cart with both original image and mockup
+                            cart.push({
+                                id: cartItemId,
+                                style: style,
+                                size: size,
+                                color: color,
+                                imageUrl: imageUrl,
+                                previewImageUrl: mockupImageUrl, // Save the complete mockup
+                                price: price,
+                                designPosition: {
+                                    x: designPosition.x,
+                                    y: designPosition.y,
+                                    scale: designPosition.scale,
+                                    rotation: designPosition.rotation,
+                                    fade: designPosition.fade,
+                                    transparency: designPosition.transparency
+                                },
+                                addedAt: new Date().toISOString()
+                            });
+                            
+                            saveCart();
+                            updateCartBadge();
+                            
+                            // Show satisfying animation before confirmation message
+                            showAddToCartAnimation(mockupImageUrl);
+                        } catch (err) {
+                            console.error('Error creating design mockup:', err);
+                            // Fallback: just use the t-shirt image without the design
+                            const folderName = getStyleFolder(style);
+                            const fallbackMockupUrl = `./apparel/${folderName}/${folderName}_${color}.png`;
+                            console.log("Using fallback mockup:", fallbackMockupUrl);
+                            
+                            cart.push({
+                                id: cartItemId,
+                                style: style,
+                                size: size,
+                                color: color,
+                                imageUrl: imageUrl,
+                                previewImageUrl: fallbackMockupUrl,
+                                price: price,
+                                designPosition: designPosition,
+                                addedAt: new Date().toISOString()
+                            });
+                            
+                            saveCart();
+                            updateCartBadge();
+                            showToast('Added custom T-shirt to cart!');
+                        }
                     };
                     
                     // Get the current t-shirt base image
                     const tshirtStyle = document.getElementById('tshirtStyle').value;
                     const tshirtColor = document.getElementById('tshirtColor').value;
                     
-                    // Use the appropriate t-shirt base image
-                    const mockupBaseSrc = `./assets/tshirt-mockups/${tshirtStyle}-${tshirtColor}.png`;
+                    // Use the appropriate t-shirt base image with correct style and color mappings
+                    const folderName = getStyleFolder(style);
+                    const mockupBaseSrc = `./apparel/${folderName}/${folderName}_${color}.png`;
+                    
+                    console.log("Loading base image from:", mockupBaseSrc);
+                    
                     // Fallback in case the exact mockup isn't available
                     baseImg.onerror = function() {
-                        baseImg.src = './assets/tshirt-mockups/regular-black.png';
+                        console.warn("Error loading specific mockup, falling back to default");
+                        baseImg.src = './apparel/tshirt/tshirt_black.png';
                         
                         // Second fallback to a simple colored rectangle if the image still fails
                         baseImg.onerror = function() {
@@ -592,7 +638,7 @@ function addCustomToCart(style, size, color, imageUrl, price, designPosition) {
                             if (itemAdded) return;
                             
                             // Simply proceed with design on a colored background
-                            mockupCtx.fillStyle = color === 'black' ? '#000000' : color === 'white' ? '#ffffff' : '#aaaaaa';
+                            mockupCtx.fillStyle = color === 'black' ? '#000000' : color === 'white' ? '#f8f8f8' : '#000000';
                             mockupCtx.fillRect(0, 0, mockupCanvas.width, mockupCanvas.height);
                             
                             // Continue with the design overlay
@@ -640,73 +686,31 @@ function addCustomToCart(style, size, color, imageUrl, price, designPosition) {
         if (itemAdded) return;
         itemAdded = true;
         
-        // Create a basic mockup using canvas
         try {
-            // Create a simple canvas for a basic mockup
-            const simpleCanvas = document.createElement('canvas');
-            const simpleCtx = simpleCanvas.getContext('2d');
-            simpleCanvas.width = 600;
-            simpleCanvas.height = 600;
+            // Use the appropriate t-shirt base image with correct style
+            const folderName = getStyleFolder(style);
+            const mockupImageUrl = `./apparel/${folderName}/${folderName}_${color}.png`;
+            console.log("Using direct mockup in fallback:", mockupImageUrl);
             
-            // Set background color to match the t-shirt color
-            simpleCtx.fillStyle = color === 'black' ? '#121212' : 
-                                 color === 'white' ? '#f8f8f8' : 
-                                 color === 'gray' ? '#888888' : 
-                                 color === 'navy' ? '#1a2a5a' : 
-                                 color === 'red' ? '#c13030' : '#f8f8f8';
-            simpleCtx.fillRect(0, 0, simpleCanvas.width, simpleCanvas.height);
-            
-            // Draw a simple t-shirt outline
-            simpleCtx.strokeStyle = 'rgba(255,255,255,0.2)';
-            simpleCtx.lineWidth = 2;
-            
-            // T-shirt neck
-            simpleCtx.beginPath();
-            simpleCtx.moveTo(250, 150);
-            simpleCtx.quadraticCurveTo(300, 100, 350, 150);
-            simpleCtx.stroke();
-            
-            // T-shirt shoulders
-            simpleCtx.beginPath();
-            simpleCtx.moveTo(250, 150);
-            simpleCtx.lineTo(150, 200);
-            simpleCtx.moveTo(350, 150);
-            simpleCtx.lineTo(450, 200);
-            simpleCtx.stroke();
-            
-            // Add text indicating this is a mockup
-            simpleCtx.font = '16px Arial';
-            simpleCtx.fillStyle = color === 'black' ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)';
-            simpleCtx.textAlign = 'center';
-            simpleCtx.fillText(`Custom ${formatStyle(style)} T-shirt (${color.toUpperCase()})`, 300, 500);
-            
-            // Add text indicating design will be applied
-            simpleCtx.font = '14px Arial';
-            simpleCtx.fillText('Your design will be applied to this area', 300, 300);
-            
-            // Draw a placeholder for the design image (small version)
-            const placeholderWidth = 100;
-            const placeholderHeight = 100;
-            simpleCtx.strokeStyle = color === 'black' ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)';
-            simpleCtx.strokeRect(300 - placeholderWidth/2, 300 - placeholderHeight/2, placeholderWidth, placeholderHeight);
-            
-            // Create a data URL for the mockup
-            const mockupImageUrl = simpleCanvas.toDataURL('image/png');
-            
-            // Add the item to cart with both the design image and basic mockup
+            // Add the item to cart
             cart.push({
                 id: cartItemId,
                 style: style,
                 size: size,
                 color: color,
                 imageUrl: imageUrl,
-                previewImageUrl: mockupImageUrl, // Use our simple mockup
+                previewImageUrl: mockupImageUrl, // Use direct path to mockup
                 price: price,
                 designPosition: designPosition,
                 addedAt: new Date().toISOString()
             });
+            
+            saveCart();
+            updateCartBadge();
+            showToast('Added custom T-shirt to cart!');
+            
         } catch (error) {
-            console.error('Error creating simple mockup:', error);
+            console.error('Error adding to cart:', error);
             // Ultimate fallback - just use the same image for both
             cart.push({
                 id: cartItemId,
@@ -719,11 +723,11 @@ function addCustomToCart(style, size, color, imageUrl, price, designPosition) {
                 designPosition: designPosition,
                 addedAt: new Date().toISOString()
             });
+            
+            saveCart();
+            updateCartBadge();
+            showToast('Added custom T-shirt to cart!');
         }
-        
-        saveCart();
-        updateCartBadge();
-        showToast('Added custom T-shirt to cart!');
     }
     
     // Helper function to apply design and add to cart
@@ -1314,11 +1318,15 @@ function renderCartItems() {
         const designDetails = item.designPosition ? 
             `Scale: ${item.designPosition.scale}%, Rotation: ${item.designPosition.rotation}°` : '';
         
+        // Get folder name for this item's style
+        const folderName = getStyleFolder(item.style);
+        const fallbackSrc = `./apparel/${folderName}/${folderName}_${item.color || 'black'}.png`;
+        
         cartHtml += `
             <div class="cart-item" data-id="${item.id}">
                 <div class="cart-item-image">
                     <img src="${item.previewImageUrl || item.imageUrl}" alt="${style} design" 
-                         loading="lazy" onerror="this.src='https://placehold.co/80?text=T-shirt';">
+                         loading="lazy" onerror="this.onerror=null; this.src='${fallbackSrc}';">
                 </div>
                 <div class="cart-item-details">
                     <div class="cart-item-title">Custom ${style} T-shirt</div>
@@ -1722,6 +1730,13 @@ function initCustomTshirt() {
     
     // Update the initial preview
     updatePreview();
+    
+    // Make sure background is set correctly at initialization
+    const initialShirtColor = tshirtColorSelect ? tshirtColorSelect.value : 'black';
+    const shirtDisplayContainer = document.querySelector('.shirt-display-container');
+    if (shirtDisplayContainer && initialShirtColor === 'white') {
+        shirtDisplayContainer.style.backgroundColor = '#000000';
+    }
 }
 
 // Update the preview in real-time
@@ -1730,6 +1745,7 @@ function updatePreview() {
     const tshirtStyle = document.getElementById('tshirtStyle').value;
     const tshirtColor = document.getElementById('tshirtColor').value;
     const tshirtSize = document.getElementById('tshirtSize').value;
+    const shirtDisplayContainer = document.querySelector('.shirt-display-container');
     
     if (!tshirtPreview) return;
     
@@ -1751,45 +1767,36 @@ function updatePreview() {
     // Calculate solid center area based on fade level
     const solidCenter = 85 - (fadeLevel * 60);
     
-    if (tshirtColor === 'white' || tshirtColor === 'gray') {
-        // For white/light shirts
-        tshirtPreview.style.filter = 'brightness(0.95) contrast(1.1)';
-        
-        // Create a simple radial gradient that fades out at the edges
-        const fadeGradient = `radial-gradient(
-            ellipse at center,
-            black ${solidCenter}%, 
-            rgba(0,0,0,0.7) ${solidCenter + 5}%,
-            rgba(0,0,0,0.3) ${solidCenter + 10}%, 
-            transparent ${solidCenter + 15}%
-        )`;
-        
-        tshirtPreview.style.maskImage = fadeGradient;
-        tshirtPreview.style.webkitMaskImage = fadeGradient;
-        
-        // Use normal blend mode but with lower opacity for light shirts
-        tshirtPreview.style.mixBlendMode = 'normal';
+    // Create a simple radial gradient that fades out at the edges
+    const fadeGradient = `radial-gradient(
+        ellipse at center,
+        black ${solidCenter}%, 
+        rgba(0,0,0,0.7) ${solidCenter + 5}%,
+        rgba(0,0,0,0.3) ${solidCenter + 10}%, 
+        transparent ${solidCenter + 15}%
+    )`;
+    
+    tshirtPreview.style.maskImage = fadeGradient;
+    tshirtPreview.style.webkitMaskImage = fadeGradient;
+    
+    if (tshirtColor === 'white') {
+        // For white shirts - set background to black for better contrast with the multiply blend mode
+        if (shirtDisplayContainer) {
+            shirtDisplayContainer.style.backgroundColor = '#000000';
+        }
+        tshirtPreview.style.filter = 'brightness(1.05) contrast(1.2)';
         tshirtPreview.style.opacity = '0.9';
+        // Use multiply blend mode for white shirts
+        tshirtPreview.style.mixBlendMode = 'multiply';
     } else {
         // For black/dark shirts
-        // Create a simple radial gradient that fades out at the edges
-        const fadeGradient = `radial-gradient(
-            ellipse at center,
-            black ${solidCenter}%, 
-            rgba(0,0,0,0.7) ${solidCenter + 5}%,
-            rgba(0,0,0,0.3) ${solidCenter + 10}%, 
-            transparent ${solidCenter + 15}%
-        )`;
-        
-        tshirtPreview.style.maskImage = fadeGradient;
-        tshirtPreview.style.webkitMaskImage = fadeGradient;
-        
-        // Screen blending works well on dark backgrounds
-        tshirtPreview.style.mixBlendMode = 'screen';
-        tshirtPreview.style.opacity = '0.85';
-        
-        // Basic enhancement for visibility
+        if (shirtDisplayContainer) {
+            shirtDisplayContainer.style.backgroundColor = ''; // Reset to default
+        }
         tshirtPreview.style.filter = 'brightness(1.05) contrast(1.1)';
+        tshirtPreview.style.opacity = '0.85';
+        // Keep screen blending for dark backgrounds
+        tshirtPreview.style.mixBlendMode = 'screen';
     }
     
     // Set position based on style
@@ -1852,27 +1859,18 @@ function updateTshirtStyle(style) {
     // Get the style image URL
     const styleUrl = styleImages[style] || styleImages.regular;
     
-    // Set up GitHub CDN fallback URLs that are guaranteed to work
-    const githubUrls = {
-        'regular': 'https://raw.githubusercontent.com/codesnippetsio/t-shirt-mockups/main/black-tshirt.png',
-        'croptop': 'https://raw.githubusercontent.com/codesnippetsio/t-shirt-mockups/main/black-croptop.png',
-        'longsleeve': 'https://raw.githubusercontent.com/codesnippetsio/t-shirt-mockups/main/black-longsleeve.png',
-        'vneck': 'https://raw.githubusercontent.com/codesnippetsio/t-shirt-mockups/main/black-vneck.png'
-    };
-    
-    // Use the GitHub URL directly since we're restricting to black shirts
-    const fallbackUrl = githubUrls[style] || githubUrls.regular;
-    tshirtBase.style.backgroundImage = `url('${fallbackUrl}')`;
+    // Update the background image
+    tshirtBase.style.backgroundImage = `url('${styleUrl}')`;
     
     // Log which image we're using
-    console.log("Using t-shirt style:", style, "with image:", fallbackUrl);
+    console.log("Using t-shirt style:", style, "with image:", styleUrl);
     
     // Adjust design positioning based on style
     const designPosition = getDesignPosition(style);
     tshirtPreview.style.top = designPosition.top;
     tshirtPreview.style.width = designPosition.width;
     
-    // Apply current color to update the image
+    // Apply current color to match the style
     updateTshirtColor(color);
 }
 
@@ -1899,9 +1897,22 @@ function updateTshirtColor(color) {
     
     // Adjust design contrast for dark backgrounds
     const tshirtImage = document.getElementById('tshirtPreview');
+    
+    // Update shirt display container background based on shirt color
+    const shirtDisplayContainer = document.querySelector('.shirt-display-container');
+    if (shirtDisplayContainer) {
+        if (color === 'white') {
+            // Set black background for white shirts
+            shirtDisplayContainer.style.backgroundColor = '#000000';
+        } else {
+            // Reset to default background for other colors
+            shirtDisplayContainer.style.backgroundColor = '';
+        }
+    }
+    
     if (tshirtImage) {
-        if (color === 'white' || color === 'gray') {
-            tshirtImage.style.filter = 'none';
+        if (color === 'white') {
+            tshirtImage.style.filter = 'brightness(1.05) contrast(1.2)';
         } else {
             // Add a subtle glow for dark backgrounds to make the image pop
             tshirtImage.style.filter = 'drop-shadow(0 0 5px rgba(255, 255, 255, 0.5))';
@@ -1923,14 +1934,24 @@ function getDesignPosition(style) {
     }
 }
 
+// Helper function to map style value to folder name
+function getStyleFolder(style) {
+    // Map style values to folder names
+    const styleMap = {
+        'regular': 'tshirt',
+        'tshirt': 'tshirt',
+        'croptop': 'croptop',
+        'longsleeve': 'longsleeve',
+        'vneck': 'vneck'
+    };
+    return styleMap[style] || 'tshirt';
+}
+
 // Get hex code for color name
 function getColorHex(color) {
     const colorMap = {
         'white': '#ffffff',
-        'black': '#000000',
-        'gray': '#888888',
-        'navy': '#001f3f',
-        'purple': '#800080'
+        'black': '#000000'
     };
     
     return colorMap[color] || color;
@@ -2433,17 +2454,32 @@ function sendOrderToEmail(order, isManualRequest = false) {
             // Format order date
             const orderDate = new Date(order.date || order.orderDate || Date.now()).toLocaleString();
             
-            // Generate an order number
-            const orderNumber = order.customer?.paypalOrderId || `ORD-${Date.now()}`;
+            // Generate an order number - prefer existing ID if available
+            const orderNumber = order.id || order.customer?.paypalOrderId || order.paypal?.orderId || `ORD-${Date.now()}`;
             
             // Set email subject and notification type based on order type
             const emailSubject = isManualRequest ? 'Your Order Request' : 'Your Order Confirmation';
             const notificationType = isManualRequest ? 'Manual Payment Required' : 'Order Confirmation';
             
-            // Create a plain text order summary for multiple items
-            const orderSummaryText = items.map((item, index) => 
-                `Item ${index + 1}:\nProduct: Custom ${formatStyle(item.style || item.name || '')} T-shirt\nSize: ${item.size || ''}\nColor: ${item.color || ''}\nPrice: $${parseFloat(item.price || 0).toFixed(2)}`
-            ).join('\n\n-----------------\n\n');
+            // Create a formatted HTML items list for the email template
+            let itemsListHTML = '';
+            const orderSummaryText = items.map((item, index) => {
+                const itemText = `Item ${index + 1}:\nProduct: Custom ${formatStyle(item.style || item.name || '')} T-shirt\nSize: ${item.size || ''}\nColor: ${item.color || ''}\nPrice: $${parseFloat(item.price || 0).toFixed(2)}`;
+                
+                // Create HTML row for each item (for table display in email)
+                itemsListHTML += `
+                <tr>
+                    <td>Item ${index + 1}</td>
+                    <td>
+                        Custom ${formatStyle(item.style || item.name || '')} T-shirt<br>
+                        Size: ${item.size || ''}<br>
+                        Color: ${item.color || ''}
+                    </td>
+                    <td>$${parseFloat(item.price || 0).toFixed(2)}</td>
+                </tr>`;
+                
+                return itemText;
+            }).join('\n\n-----------------\n\n');
             
             // Ensure we have valid product details with explicit fallbacks
             const productStyle = formatStyle(firstItem.style || firstItem.name || 'T-shirt');
@@ -2458,15 +2494,67 @@ function sendOrderToEmail(order, isManualRequest = false) {
                 price: productPrice
             });
             
+            // Process images for attachments - leveraging EmailJS Pro features
+            let designImageAttachment = null;
+            let mockupImageAttachment = null;
+            
+            // Process design image for attachment (up to 2MB)
+            if (firstItem.imageUrl) {
+                try {
+                    // For EmailJS Pro, we can send binary attachments
+                    // Fetch the image as a Blob
+                    const designImageResponse = await fetch(firstItem.imageUrl);
+                    const designImageBlob = await designImageResponse.blob();
+                    
+                    // Check image size - EmailJS Pro supports up to 2MB
+                    if (designImageBlob.size <= 2 * 1024 * 1024) {
+                        designImageAttachment = {
+                            name: `design_${orderNumber}.png`,
+                            data: designImageBlob
+                        };
+                    } else {
+                        console.warn('Design image exceeds 2MB limit, using URL instead');
+                    }
+                } catch (error) {
+                    console.error('Error processing design image for attachment:', error);
+                }
+            }
+            
+            // Process mockup image for attachment (up to 2MB)
+            if (firstItem.previewImageUrl) {
+                try {
+                    // Fetch the mockup image as a Blob
+                    const mockupImageResponse = await fetch(firstItem.previewImageUrl);
+                    const mockupImageBlob = await mockupImageResponse.blob();
+                    
+                    // Check image size - EmailJS Pro supports up to 2MB
+                    if (mockupImageBlob.size <= 2 * 1024 * 1024) {
+                        mockupImageAttachment = {
+                            name: `mockup_${orderNumber}.png`,
+                            data: mockupImageBlob
+                        };
+                    } else {
+                        console.warn('Mockup image exceeds 2MB limit, using URL instead');
+                    }
+                } catch (error) {
+                    console.error('Error processing mockup image for attachment:', error);
+                }
+            }
+            
+            // Customer details - support both structures (direct properties or customer object)
+            const customerName = order.customer?.name || order.customerName || 'Customer';
+            const customerEmail = order.customer?.email || order.customerEmail || '';
+            const customerAddress = order.customer?.address || order.address || 'Not provided';
+            
             // Format email parameters for the customer with individual variables
             const emailParams = {
                 // Customer info
-                to_name: order.customer?.name || 'Customer',
-                to_email: order.customer?.email || '',
-                email: order.customer?.email || '', // For backward compatibility
-                customer_address: order.customer?.address || 'Not provided',
-                customer_email: order.customer?.email || '',
-                customer_name: order.customer?.name || 'Customer',
+                to_name: customerName,
+                to_email: customerEmail,
+                email: customerEmail, // For backward compatibility
+                customer_address: customerAddress,
+                customer_email: customerEmail,
+                customer_name: customerName,
                 
                 // Order info
                 order_id: orderNumber,
@@ -2480,9 +2568,12 @@ function sendOrderToEmail(order, isManualRequest = false) {
                 product_color: productColor,
                 product_price: productPrice,
                 
-                // Use original image URLs instead of data URLs
+                // Image URLs (fallback if attachments don't work)
                 product_image: firstItem.imageUrl || 'https://via.placeholder.com/200x200?text=Design',
                 mockup_image: firstItem.previewImageUrl || 'https://via.placeholder.com/200x200?text=Mockup',
+                
+                // New formatted items list for table display
+                items_list: itemsListHTML,
                 
                 // Email content
                 subject: emailSubject,
@@ -2490,11 +2581,27 @@ function sendOrderToEmail(order, isManualRequest = false) {
                 notification_type: notificationType,
                 is_manual_request: isManualRequest ? "yes" : "no",
                 
-                // Order summary for multiple items
+                // Order summary for text fallback
                 order_summary: orderSummaryText
             };
             
-            console.log('Sending order confirmation email with params:', JSON.stringify(emailParams));
+            // Add file attachments if available (EmailJS Pro feature)
+            if (designImageAttachment || mockupImageAttachment) {
+                emailParams.attachments = [];
+                
+                if (designImageAttachment) {
+                    emailParams.attachments.push(designImageAttachment);
+                }
+                
+                if (mockupImageAttachment) {
+                    emailParams.attachments.push(mockupImageAttachment);
+                }
+            }
+            
+            console.log('Sending order confirmation email with params:', JSON.stringify({
+                ...emailParams,
+                attachments: emailParams.attachments ? `${emailParams.attachments.length} attachment(s)` : 'none'
+            }));
             
             // Send the email using EmailJS with the correct template ID
             emailjs.send(
@@ -3219,17 +3326,17 @@ function handleTshirtColorChange() {
 
 // Create mockup directory if it doesn't exist
 function createMockupDirectory() {
-    // Create a folder structure for mockups if it doesn't exist already
-    const mockupDir = 'assets/tshirt-mockups';
-    
-    // For each style and color combination, ensure we have a base mockup
-    const styles = ['regular', 'croptop', 'longsleeve', 'vneck'];
-    const colors = ['black', 'white', 'gray'];
-    
-    // Check if we need to create any placeholder images
+    // Check if mock directory exists
+    const mockupDir = './apparel/tshirt';
     let mocksExist = false;
     
-    // Try to load an image to check if mockups exist
+    // Check if the mockups have already been created in this session
+    if (window.tshirtMockups && Object.keys(window.tshirtMockups).length > 0) {
+        console.log('Mockups already created in this session');
+        return;
+    }
+    
+    // Test if we need to create the mockups by trying to load one
     const testImg = new Image();
     testImg.onload = function() {
         mocksExist = true;
@@ -3241,15 +3348,23 @@ function createMockupDirectory() {
         createPlaceholderMockups();
     };
     
-    // Try to load a test image
-    testImg.src = `${mockupDir}/regular-black.png`;
+    // Try to load test images for both black and white variants
+    testImg.src = `${mockupDir}/tshirt_black.png`;
+    
+    // Also check if white variant is available
+    const testWhiteImg = new Image();
+    testWhiteImg.onerror = function() {
+        console.log('Creating white shirt mockups');
+        createPlaceholderMockups();
+    };
+    testWhiteImg.src = `${mockupDir}/tshirt_white.png`;
 }
 
 // Create placeholder mockups if real ones aren't available
 function createPlaceholderMockups() {
     // Create canvas-based placeholders for t-shirt mockups
     const styles = ['regular', 'croptop', 'longsleeve', 'vneck'];
-    const colors = ['black'];  // For now only supporting black shirts
+    const colors = ['black', 'white'];  // Support both black and white shirts
     
     styles.forEach(style => {
         colors.forEach(color => {
@@ -3417,8 +3532,16 @@ function createMockupCanvas(style, color) {
         ctx.shadowOffsetX = 5;
         ctx.shadowOffsetY = 5;
         ctx.lineWidth = 2;
-        ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
+        ctx.strokeStyle = color === 'white' ? 'rgba(0, 0, 0, 0.2)' : 'rgba(0, 0, 0, 0.3)';
         ctx.stroke();
+        
+        // Add an extra border for white shirts to make them visible
+        if (color === 'white') {
+            ctx.shadowColor = 'transparent';
+            ctx.lineWidth = 1;
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.1)';
+            ctx.stroke();
+        }
         
         // Reset shadow
         ctx.shadowColor = 'transparent';
@@ -3774,7 +3897,7 @@ function sendInvoiceWithoutPayment() {
         return;
     }
     
-    // Prompt for customer email
+    // Prompt for customer information
     const customerEmail = prompt("Please enter your email address to receive the invoice:");
     
     // Debug
@@ -3786,9 +3909,18 @@ function sendInvoiceWithoutPayment() {
         return;
     }
     
+    // Prompt for customer name
+    const customerName = prompt("Please enter your name:", "Customer");
+    
+    // Prompt for customer address
+    const customerAddress = prompt("Please enter your shipping address:", "");
+    
     showLoadingOverlay('Sending invoice...');
     
     const total = cart.reduce((sum, item) => sum + parseFloat(item.price), 0);
+    
+    // Get the first item for individual product details
+    const firstItem = cart[0] || {};
     
     // Format order items for the email directly
     const itemsList = cart.map(item => `
@@ -3803,82 +3935,175 @@ function sendInvoiceWithoutPayment() {
         </tr>
     `).join('');
     
-    // Simplified direct email sending to customer
-    const emailParams = {
-        to_name: 'Customer',
-        to_email: customerEmail,
-        email: customerEmail, // For backward compatibility
-        order_number: `INV-${Date.now()}`,
-        order_date: new Date().toLocaleString(),
-        payment_method: 'Invoice Request (No Payment)',
-        order_total: `$${total.toFixed(2)}`,
-        items_list: itemsList,
-        from_name: 'NextGenStudios',
-        subject: 'Your Invoice',
-        notification_type: 'Invoice Request',
-        is_manual_request: 'true'
-    };
+    // Create a plain text order summary for multiple items
+    const orderSummaryText = cart.map((item, index) => 
+        `Item ${index + 1}:\nProduct: Custom ${formatStyle(item.style || '')} T-shirt\nSize: ${item.size || ''}\nColor: ${item.color || ''}\nPrice: $${parseFloat(item.price || 0).toFixed(2)}`
+    ).join('\n\n-----------------\n\n');
     
-    console.log("Invoice email parameters:", emailParams);
-    
-    // Check EmailJS configuration
-    console.log("EmailJS Config:", {
-        serviceId: config.emailjs.serviceId,
-        templateId: config.emailjs.customerTemplateId,
-        publicKey: emailjs._userID
-    });
-    
-    // Send email directly to customer
-    emailjs.send(config.emailjs.serviceId, config.emailjs.customerTemplateId, emailParams)
-        .then(function(response) {
-            console.log("Invoice email sent to customer:", response);
+    // Process images for attachments - leveraging EmailJS Pro features
+    async function processEmailWithAttachments() {
+        let designImageAttachment = null;
+        let mockupImageAttachment = null;
+        
+        // Process design image for attachment (up to 2MB)
+        if (firstItem.imageUrl) {
+            try {
+                // Fetch the image as a Blob
+                const designImageResponse = await fetch(firstItem.imageUrl);
+                const designImageBlob = await designImageResponse.blob();
+                
+                // Check image size - EmailJS Pro supports up to 2MB
+                if (designImageBlob.size <= 2 * 1024 * 1024) {
+                    designImageAttachment = {
+                        name: `design_invoice_${Date.now()}.png`,
+                        data: designImageBlob
+                    };
+                } else {
+                    console.warn('Design image exceeds 2MB limit, using URL instead');
+                }
+            } catch (error) {
+                console.error('Error processing design image for attachment:', error);
+            }
+        }
+        
+        // Process mockup image for attachment (up to 2MB)
+        if (firstItem.previewImageUrl) {
+            try {
+                // Fetch the mockup image as a Blob
+                const mockupImageResponse = await fetch(firstItem.previewImageUrl);
+                const mockupImageBlob = await mockupImageResponse.blob();
+                
+                // Check image size - EmailJS Pro supports up to 2MB
+                if (mockupImageBlob.size <= 2 * 1024 * 1024) {
+                    mockupImageAttachment = {
+                        name: `mockup_invoice_${Date.now()}.png`,
+                        data: mockupImageBlob
+                    };
+                } else {
+                    console.warn('Mockup image exceeds 2MB limit, using URL instead');
+                }
+            } catch (error) {
+                console.error('Error processing mockup image for attachment:', error);
+            }
+        }
+        
+        // Simplified direct email sending to customer
+        const emailParams = {
+            // Customer info
+            to_name: customerName || 'Customer',
+            to_email: customerEmail,
+            email: customerEmail, // For backward compatibility
+            customer_address: customerAddress || 'To be provided',
+            customer_email: customerEmail,
+            customer_name: customerName || 'Customer',
             
-            // Now send notification to business
-            const businessParams = {
-                ...emailParams,
-                to_name: 'Shop Admin',
-                to_email: config.businessEmail,
-                email: config.businessEmail, // For backward compatibility
-                customer_email: customerEmail,
-                customer_name: 'Customer',
-                subject: 'New Invoice Request'
-            };
+            // Order info
+            order_id: `INV-${Date.now()}`,
+            order_date: new Date().toLocaleString(),
+            payment_method: 'Invoice Request (No Payment)',
+            order_total: total.toFixed(2),
             
-            return emailjs.send(config.emailjs.serviceId, config.emailjs.customerTemplateId, businessParams);
-        })
-        .then(function(response) {
-            console.log("Business notification sent:", response);
-            hideLoadingOverlay();
-            showToast('Invoice sent successfully!', 'success');
+            // Product details (from first item)
+            product_style: formatStyle(firstItem.style || ''),
+            product_size: firstItem.size || '',
+            product_color: firstItem.color || '',
+            product_price: parseFloat(firstItem.price || 0).toFixed(2),
             
-            // Close the cart modal
-            document.getElementById('cartModal').style.display = 'none';
+            // Image URLs (fallback if attachments don't work)
+            product_image: firstItem.imageUrl || 'https://via.placeholder.com/200x200?text=Design',
+            mockup_image: firstItem.previewImageUrl || 'https://via.placeholder.com/200x200?text=Mockup',
             
-            // Clear the cart
-            cart = [];
-            saveCart();
-            updateCartBadge();
-        })
-        .catch(function(error) {
-            console.error('Error sending invoice:', error);
-            console.error("Error details:", {
-                name: error.name,
-                message: error.message,
-                text: error.text,
-                status: error.status
-            });
+            // HTML items list for table display
+            items_list: itemsList,
             
-            // Show more detailed error
-            let errorMessage = 'Failed to send invoice. Please try again.';
-            if (error.text) {
-                errorMessage += ' Error: ' + error.text;
-            } else if (error.message) {
-                errorMessage += ' Error: ' + error.message;
+            // Email content
+            subject: 'Your Invoice Request',
+            from_name: 'NextGenStudios',
+            notification_type: 'Invoice Request',
+            is_manual_request: 'true',
+            
+            // Order summary for text fallback
+            order_summary: orderSummaryText
+        };
+        
+        // Add file attachments if available (EmailJS Pro feature)
+        if (designImageAttachment || mockupImageAttachment) {
+            emailParams.attachments = [];
+            
+            if (designImageAttachment) {
+                emailParams.attachments.push(designImageAttachment);
             }
             
-            hideLoadingOverlay();
-            showToast(errorMessage, 'error');
+            if (mockupImageAttachment) {
+                emailParams.attachments.push(mockupImageAttachment);
+            }
+        }
+        
+        console.log("Invoice email parameters:", JSON.stringify({
+            ...emailParams,
+            attachments: emailParams.attachments ? `${emailParams.attachments.length} attachment(s)` : 'none'
+        }));
+        
+        // Check EmailJS configuration
+        console.log("EmailJS Config:", {
+            serviceId: config.emailjs.serviceId,
+            templateId: config.emailjs.customerTemplateId,
+            publicKey: emailjs._userID
         });
+        
+        // Send email directly to customer
+        return emailjs.send(config.emailjs.serviceId, config.emailjs.customerTemplateId, emailParams)
+            .then(function(response) {
+                console.log("Invoice email sent to customer:", response);
+                
+                // Now send notification to business
+                const businessParams = {
+                    ...emailParams,
+                    to_name: 'Shop Admin',
+                    to_email: config.businessEmail,
+                    email: config.businessEmail, // For backward compatibility
+                    subject: 'New Invoice Request'
+                };
+                
+                return emailjs.send(config.emailjs.serviceId, config.emailjs.customerTemplateId, businessParams);
+            })
+            .then(function(response) {
+                console.log("Business notification sent:", response);
+                hideLoadingOverlay();
+                showToast('Invoice sent successfully!', 'success');
+                
+                // Close the cart modal
+                document.getElementById('cartModal').style.display = 'none';
+                
+                // Clear the cart
+                cart = [];
+                saveCart();
+                updateCartBadge();
+            })
+            .catch(function(error) {
+                console.error('Error sending invoice:', error);
+                console.error("Error details:", {
+                    name: error.name,
+                    message: error.message,
+                    text: error.text,
+                    status: error.status
+                });
+                
+                // Show more detailed error
+                let errorMessage = 'Failed to send invoice. Please try again.';
+                if (error.text) {
+                    errorMessage += ' Error: ' + error.text;
+                } else if (error.message) {
+                    errorMessage += ' Error: ' + error.message;
+                }
+                
+                hideLoadingOverlay();
+                showToast(errorMessage, 'error');
+            });
+    }
+    
+    // Execute the async function
+    processEmailWithAttachments();
 }
 
 // Function to test invoice email specifically
@@ -3889,90 +4114,195 @@ function testInvoiceEmail() {
     // Prompt for test email
     const testEmail = prompt("Enter email address for test:");
     if (!testEmail || !testEmail.includes('@')) {
+        showToast("Invalid email address", "error");
         hideLoadingOverlay();
-        showToast('Please provide a valid email address.', 'error');
         return;
     }
     
-    // Create a sample order 
+    // Prompt for test name
+    const testName = prompt("Enter name for test:", "Test Customer");
+    
+    // Prompt for test address 
+    const testAddress = prompt("Enter shipping address for test:", "123 Test Street, Test City, TS1 2AB");
+    
+    // Create a test order
     const testOrder = {
+        id: "TEST-" + Date.now(),
+        date: new Date().toISOString(),
         items: [
             {
-                name: "Custom Regular T-shirt",
-                style: "regular",
-                size: "L",
+                id: "test-item-1",
+                name: "Test T-Shirt",
+                style: "Premium",
                 color: "Black",
-                price: "25.99"
+                size: "L",
+                price: 29.99,
+                imageUrl: "https://via.placeholder.com/500?text=Test+Design",
+                previewImageUrl: "https://via.placeholder.com/500?text=Test+Mockup"
             }
         ],
-        total: 25.99,
+        total: 29.99,
         paymentMethod: 'Test Invoice',
-        orderDate: new Date().toLocaleString(),
-        date: new Date().toISOString(),
         customer: {
+            id: "test-customer",
             email: testEmail,
-            name: 'Test Customer'
+            name: testName || 'Test Customer',
+            address: testAddress || '123 Test Street, Test City, TS1 2AB, Test Country'
         }
     };
     
     console.log("Testing invoice email with order:", JSON.stringify(testOrder, null, 2));
     
-    // Format order items for the email
+    // Get the first item for individual product details
+    const firstItem = testOrder.items[0] || {};
+    
+    // Format items list for HTML table
     const itemsList = testOrder.items.map(item => `
         <tr>
-            <td style="padding: 10px; border-bottom: 1px solid #e0e0e0;">
-                <strong>${item.name}</strong><br>
-                Size: ${item.size}, Color: ${item.color}
-            </td>
-            <td style="padding: 10px; border-bottom: 1px solid #e0e0e0; text-align: right;">
-                $${parseFloat(item.price).toFixed(2)}
-            </td>
+            <td>${item.name} (${item.style}, ${item.color}, ${item.size})</td>
+            <td>$${parseFloat(item.price).toFixed(2)}</td>
         </tr>
     `).join('');
     
-    // Format email parameters
-    const emailParams = {
-        to_name: testOrder.customer.name,
-        to_email: testOrder.customer.email,
-        order_number: `TEST-${Date.now()}`,
-        order_date: new Date(testOrder.date).toLocaleString(),
-        payment_method: testOrder.paymentMethod,
-        order_total: `$${testOrder.total.toFixed(2)}`,
-        items_list: itemsList,
-        from_name: 'NextGenStudios',
-        subject: 'Test Invoice Email',
-        notification_type: 'Test Invoice',
-        is_manual_request: 'true'
-    };
+    // Create a plain text order summary
+    const orderSummaryText = testOrder.items.map((item, index) => 
+        `Item ${index + 1}:\nProduct: Custom ${formatStyle(item.style || item.name || '')} T-shirt\nSize: ${item.size || ''}\nColor: ${item.color || ''}\nPrice: $${parseFloat(item.price || 0).toFixed(2)}`
+    ).join('\n\n-----------------\n\n');
     
-    console.log("Email parameters:", emailParams);
-    
-    // Check if EmailJS is properly initialized
-    console.log("EmailJS Config:", {
-        serviceId: config.emailjs.serviceId,
-        templateId: config.emailjs.customerTemplateId,
-        publicKey: emailjs._userID // Check if the public key is set
-    });
-    
-    // Send test email directly
-    emailjs.send(config.emailjs.serviceId, config.emailjs.customerTemplateId, emailParams)
-        .then(function(response) {
-            console.log("Test invoice email sent successfully:", response);
-            hideLoadingOverlay();
-            showToast(`Test invoice email sent to ${testEmail}`, 'success');
-        })
-        .catch(function(error) {
-            console.error("Test invoice email failed:", error);
-            console.error("Error details:", {
-                name: error.name,
-                message: error.message,
-                text: error.text,
-                status: error.status,
-                stack: error.stack
-            });
-            hideLoadingOverlay();
-            showToast(`Test failed: ${error.name || ''} ${error.message || ''} ${error.text || ''}`, 'error');
+    // Process test images for attachments
+    async function processTestEmailWithAttachments() {
+        let designImageAttachment = null;
+        let mockupImageAttachment = null;
+        
+        // Process design image for attachment
+        if (firstItem.imageUrl) {
+            try {
+                // Fetch the image as a Blob
+                const designImageResponse = await fetch(firstItem.imageUrl);
+                const designImageBlob = await designImageResponse.blob();
+                
+                // Check image size - EmailJS Pro supports up to 2MB
+                if (designImageBlob.size <= 2 * 1024 * 1024) {
+                    designImageAttachment = {
+                        name: `test_design_${Date.now()}.png`,
+                        data: designImageBlob
+                    };
+                } else {
+                    console.warn('Test design image exceeds 2MB limit, using URL instead');
+                }
+            } catch (error) {
+                console.error('Error processing test design image for attachment:', error);
+            }
+        }
+        
+        // Process mockup image for attachment
+        if (firstItem.previewImageUrl) {
+            try {
+                // Fetch the mockup image as a Blob
+                const mockupImageResponse = await fetch(firstItem.previewImageUrl);
+                const mockupImageBlob = await mockupImageResponse.blob();
+                
+                // Check image size - EmailJS Pro supports up to 2MB
+                if (mockupImageBlob.size <= 2 * 1024 * 1024) {
+                    mockupImageAttachment = {
+                        name: `test_mockup_${Date.now()}.png`,
+                        data: mockupImageBlob
+                    };
+                } else {
+                    console.warn('Test mockup image exceeds 2MB limit, using URL instead');
+                }
+            } catch (error) {
+                console.error('Error processing test mockup image for attachment:', error);
+            }
+        }
+        
+        // Format email parameters
+        const emailParams = {
+            // Customer info
+            to_name: testOrder.customer.name,
+            to_email: testOrder.customer.email,
+            email: testOrder.customer.email, // For backward compatibility
+            customer_address: testOrder.customer.address,
+            customer_email: testOrder.customer.email,
+            customer_name: testOrder.customer.name,
+            
+            // Order info
+            order_id: `TEST-${Date.now()}`,
+            order_date: new Date(testOrder.date).toLocaleString(),
+            payment_method: testOrder.paymentMethod,
+            order_total: testOrder.total.toFixed(2),
+            
+            // Product details (from first item)
+            product_style: formatStyle(firstItem.style || firstItem.name || ''),
+            product_size: firstItem.size || '',
+            product_color: firstItem.color || '',
+            product_price: parseFloat(firstItem.price || 0).toFixed(2),
+            
+            // Image URLs (fallback if attachments don't work)
+            product_image: firstItem.imageUrl || 'https://via.placeholder.com/200x200?text=Design',
+            mockup_image: firstItem.previewImageUrl || 'https://via.placeholder.com/200x200?text=Mockup',
+            
+            // HTML items list for table display
+            items_list: itemsList,
+            
+            // Email content
+            subject: 'Test Invoice Email',
+            from_name: 'NextGenStudios',
+            notification_type: 'Test Invoice',
+            is_manual_request: 'true',
+            
+            // Order summary for text fallback
+            order_summary: orderSummaryText
+        };
+        
+        // Add file attachments if available (EmailJS Pro feature)
+        if (designImageAttachment || mockupImageAttachment) {
+            emailParams.attachments = [];
+            
+            if (designImageAttachment) {
+                emailParams.attachments.push(designImageAttachment);
+            }
+            
+            if (mockupImageAttachment) {
+                emailParams.attachments.push(mockupImageAttachment);
+            }
+        }
+        
+        console.log("Email parameters:", JSON.stringify({
+            ...emailParams,
+            attachments: emailParams.attachments ? `${emailParams.attachments.length} attachment(s)` : 'none'
+        }));
+        
+        // Check if EmailJS is properly initialized
+        console.log("EmailJS Config:", {
+            serviceId: config.emailjs.serviceId,
+            templateId: config.emailjs.customerTemplateId,
+            publicKey: emailjs._userID // Check if the public key is set
         });
+        
+        // Send test email directly
+        return emailjs.send(config.emailjs.serviceId, config.emailjs.customerTemplateId, emailParams)
+            .then(function(response) {
+                console.log("Test invoice email sent successfully:", response);
+                hideLoadingOverlay();
+                showToast(`Test invoice email sent to ${testEmail}`, 'success');
+            })
+            .catch(function(error) {
+                console.error("Test invoice email failed:", error);
+                console.error("Error details:", {
+                    name: error.name,
+                    message: error.message,
+                    text: error.text,
+                    status: error.status,
+                    stack: error.stack
+                });
+                hideLoadingOverlay();
+                showToast(`Test failed: ${error.name || ''} ${error.message || ''} ${error.text || ''}`, 'error');
+            });
+    }
+    
+    // Execute the async function
+    processTestEmailWithAttachments();
 }
 
 // Add a test invoice button in non-production environments
@@ -3994,7 +4324,7 @@ if (location.hostname === 'localhost' || location.hostname === '127.0.0.1' || lo
     // Add click event
     testInvoiceButton.addEventListener('click', testInvoiceEmail);
     
-    // Add to document
+    // Add to the page
     document.body.appendChild(testInvoiceButton);
 }
 
@@ -4034,7 +4364,19 @@ function testSimpleEmail() {
         is_manual_request: "no",
         
         // Order summary
-        order_summary: "Item 1:\nProduct: Custom Premium T-shirt\nSize: XL\nColor: Black\nPrice: $29.99"
+        order_summary: "Item 1:\nProduct: Custom Premium T-shirt\nSize: XL\nColor: Black\nPrice: $29.99",
+        
+        // HTML table items list for testing
+        items_list: `
+        <tr>
+            <td>Item 1</td>
+            <td>
+                Custom Premium T-shirt<br>
+                Size: XL<br>
+                Color: Black
+            </td>
+            <td>$29.99</td>
+        </tr>`
     };
     
     // Prompt for email to test with
@@ -4046,25 +4388,75 @@ function testSimpleEmail() {
     
     showLoadingOverlay('Sending test email...');
     
-    console.log('Sending test email with params:', JSON.stringify(simpleParams));
+    // Process test images for attachments
+    const processAttachments = async () => {
+        try {
+            let attachments = [];
+            
+            // Add test image attachments (for EmailJS Pro)
+            const testImageUrls = [
+                "https://via.placeholder.com/300x300?text=TestDesign",
+                "https://via.placeholder.com/300x300?text=TestMockup"
+            ];
+            
+            // Ask whether to test with attachments
+            const useAttachments = confirm("Would you like to test with image attachments? (EmailJS Pro feature)");
+            
+            if (useAttachments) {
+                for (let i = 0; i < testImageUrls.length; i++) {
+                    try {
+                        const response = await fetch(testImageUrls[i]);
+                        const blob = await response.blob();
+                        
+                        // Check size - EmailJS Pro supports up to 2MB
+                        if (blob.size <= 2 * 1024 * 1024) {
+                            attachments.push({
+                                name: `test_image_${i+1}.png`,
+                                data: blob
+                            });
+                        } else {
+                            console.warn(`Test image ${i+1} exceeds 2MB limit, skipping attachment`);
+                        }
+                    } catch (error) {
+                        console.error(`Error processing test image ${i+1}:`, error);
+                    }
+                }
+                
+                // Add attachments to parameters if available
+                if (attachments.length > 0) {
+                    simpleParams.attachments = attachments;
+                }
+            }
+            
+            console.log('Sending test email with params:', JSON.stringify({
+                ...simpleParams,
+                attachments: simpleParams.attachments ? `${simpleParams.attachments.length} attachment(s)` : 'none'
+            }));
+            
+            // Send the test email with direct template ID
+            return emailjs.send(
+                config.emailjs.serviceId,
+                'template_pchevsq', // Use template ID directly 
+                simpleParams,
+                config.emailjs.userId
+            );
+        } catch (error) {
+            throw error;
+        }
+    };
     
-    // Send the test email with direct template ID
-    emailjs.send(
-        config.emailjs.serviceId,
-        'template_pchevsq', // Use template ID directly 
-        simpleParams,
-        config.emailjs.userId
-    )
-    .then((response) => {
-        console.log('Test email sent successfully:', response);
-        hideLoadingOverlay();
-        showModal('Test Email Sent', 'A test email has been sent successfully. Please check your inbox.');
-    })
-    .catch((error) => {
-        console.error('Failed to send test email:', error);
-        hideLoadingOverlay();
-        showModal('Test Email Failed', 'Failed to send test email. Error: ' + JSON.stringify(error));
-    });
+    // Process attachments and send email
+    processAttachments()
+        .then((response) => {
+            console.log('Test email sent successfully:', response);
+            hideLoadingOverlay();
+            showModal('Test Email Sent', 'A test email has been sent successfully. Please check your inbox.');
+        })
+        .catch((error) => {
+            console.error('Failed to send test email:', error);
+            hideLoadingOverlay();
+            showModal('Test Email Failed', 'Failed to send test email. Error: ' + JSON.stringify(error));
+        });
 }
 
 // Convert an image URL to a data URL for email attachment
@@ -4230,7 +4622,7 @@ if (location.hostname === 'localhost' || location.hostname === '127.0.0.1' || lo
     // Add click event
     basicTestButton.addEventListener('click', testBasicEmail);
     
-    // Add to document
+    // Add to the page
     document.body.appendChild(basicTestButton);
 }
 
