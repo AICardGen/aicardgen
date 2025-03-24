@@ -1,6 +1,6 @@
 ## Hi there 👋
 
-Anything in this repository is owned by its author and may not be used in any way shape or form by third parties written explicit permission.
+Anything in this repository is owned by its author and may not be used in any way shape or form by third parties without written explicit permission.
 
 © NextCardGen Studios 2025. All rights reserved.
 <!--
