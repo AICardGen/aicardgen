@@ -1,5 +1,8 @@
 ## Hi there 👋
 
+Anything in this repository is owned by its author and may not be used in any way shape or form by third parties written explicit permission.
+
+© NextCardGen Studios 2025. All rights reserved.
 <!--
 **AICardGen/aicardgen** is a ✨ _special_ ✨ repository because its `README.md` (this file) appears on your GitHub profile.
 
